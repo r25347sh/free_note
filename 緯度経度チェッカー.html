@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>位置情報テスト</title>
+</head>
+<body>
+    <h1>麗澤校内 GPSテスト</h1>
+    <div id="output" style="font-size: 24px;">位置情報を取得中...</div>
+
+    <script>
+        // スマホが動くたびに、最新の緯度経度を自動で書き換えるJS
+        navigator.geolocation.watchPosition(
+            (position) => {
+                const lat = position.coords.latitude;  // 緯度
+                const lng = position.coords.longitude; // 経度
+                document.getElementById('output').innerHTML = `緯度: ${lat}<br>経度: ${lng}`;
+            },
+            (error) => {
+                document.getElementById('output').innerText = "エラー: 位置情報を許可してください";
+            },
+            { enableHighAccuracy: true } // 最高精度モード
+        );
+    </script>
+</body>
+</html>
