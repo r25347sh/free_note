@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>受信側（Chromebook用）</title>
+</head>
+<body>
+    <h1>教室電波スキャナー（1組用）</h1>
+    <button id="scanBtn" style="font-size:24px; padding:20px;">スキャン開始</button>
+    
+    <h2>近くにいるユーザー一覧</h2>
+    <ul id="userList" style="font-size:20px; line-height:1.8;"></ul>
+
+    <script>
+        const REITAKU_SERVICE_UUID = 'abcdef00-1234-5678-90ab-cdef12345678';
+
+        document.getElementById('scanBtn').addEventListener('click', async () => {
+            const userListEl = document.getElementById('userList');
+            userListEl.innerHTML = "<li>スキャン中...</li>";
+
+            try {
+                // Chromeで低電力Bluetooth（BLE）の常時スキャンを開始する
+                const scan = await navigator.bluetooth.requestLEScan({
+                    filters: [{ services: [REITAKU_SERVICE_UUID] }],
+                    keepRepeatedDevices: true // 同じ端末から何回も電波を受信する設定（リアルタイム用）
+                });
+
+                // 電波を受信するたびにこのイベントが爆速で走る
+                navigator.bluetooth.addEventListener('advertisementreceived', event => {
+                    const userId = event.device.id;   // スマホ固有のブラウザ内ID
+                    const name = event.device.name || "名無しスマホ";
+                    const rssi = event.rssi;           // 電波強度（-30は至近距離、-90は超遠い）
+
+                    // 画面のリストを更新（すでにあったら上書き、なければ追加）
+                    let li = document.getElementById(userId);
+                    if (!li) {
+                        li = document.createElement('li');
+                        li.id = userId;
+                        userListEl.appendChild(li);
+                    }
+                    li.innerText = `端末: ${name} | 強度(RSSI): ${rssi}dBm`;
+
+                    // 🛠️ 【ここに次のコードを仕込む】
+                    // もし rssi が -60 以上の強さ（＝部屋の中にいる）なら、
+                    // fetch() で 「user_id と 教室名」 をサーバー（Supabase等）に送り、マップに反映させる！
+                });
+
+                document.getElementById('scanBtn').innerText = "スキャン稼働中...";
+
+            } catch (error) {
+                userListEl.innerHTML = `<li style="color:red;">エラー: ${error.message}</li>`;
+                console.error(error);
+            }
+        });
+    </script>
+</body>
+</html>
