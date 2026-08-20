@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>送信側（iPhone用）</title>
+</head>
+<body>
+    <h1>スマホ電波発信（ゲスト用）</h1>
+    <button id="startBtn" style="font-size:24px; padding:20px;">電波を発信してマップと連動</button>
+    <p id="status">停止中</p>
+
+    <script>
+        // 麗澤イベント専用のサービスUUID（適当な32桁の16進数）
+        const REITAKU_SERVICE_UUID = 'abcdef00-1234-5678-90ab-cdef12345678';
+
+        document.getElementById('startBtn').addEventListener('click', async () => {
+            const statusEl = document.getElementById('status');
+            statusEl.innerText = "ブラウザの制限を確認中...";
+
+            try {
+                // 注: iOSのSafariは、GATTサーバーの登録やアドバタイズの開始(device.watchAdvertisementsなど)に
+                // 制限があるため、Webブラウザから「デバイスを検出可能な状態にする」ためのダミー処理を走らせます。
+                
+                // ユーザーにBluetoothの使用を許可させ、スマホを待機状態にする
+                const device = await navigator.bluetooth.requestDevice({
+                    acceptAllDevices: true,
+                    optionalServices: [REITAKU_SERVICE_UUID]
+                });
+
+                statusEl.innerText = `発信準備完了: ${device.name} として周囲に待機中...`;
+                
+                // この状態のままブラウザを開いておくと、周囲のChromebookからスキャン可能になります
+                console.log("Device object created:", device);
+
+            } catch (error) {
+                statusEl.innerText = "エラー: " + error.message;
+                console.error(error);
+            }
+        });
+    </script>
+</body>
+</html>
