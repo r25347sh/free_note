@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LINE Beacon 一括書き込みツール (Feasycom用)</title>
+    <style>
+        body { font-family: sans-serif; max-width: 600px; margin: 20px auto; padding: 0 10px; line-height: 1.6; background: #f9f9f9; color: #333; }
+        h1 { font-size: 1.5rem; color: #111; border-bottom: 2px solid #00b900; padding-bottom: 8px; }
+        textarea { width: 100%; height: 120px; font-family: monospace; font-size: 1rem; box-sizing: border-box; padding: 10px; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 4px; }
+        button { width: 100%; padding: 15px; font-size: 1.1rem; background-color: #00b900; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        button:hover { background-color: #009900; }
+        button:disabled { background-color: #ccc; cursor: not-allowed; }
+        .log-area { background: #222; color: #00ff00; font-family: monospace; padding: 15px; border-radius: 4px; height: 180px; overflow-y: auto; margin-top: 15px; font-size: 0.9rem; }
+        .status { font-weight: bold; margin: 10px 0; color: #666; }
+    </style>
+</head>
+<body>
+
+    <h1>LINE Beacon 一括書き込みツール</h1>
+    <p>1台ずつ電源を入れ、ボタンを押してペアリングするだけで自動設定します。</p>
+
+    <label for="hwidList"><strong>1. 発行したHWID（10文字の16進数）を改行区切りで貼り付け:</strong></label>
+    <textarea id="hwidList" placeholder="AABBCCDDEE&#10;1122334455&#10;6677889900"></textarea>
+
+    <div class="status" id="currentStatus">残り：0 台</div>
+
+    <!-- 通常のWebボタン。クリックするだけでWeb Bluetoothが起動します -->
+    <button id="writeBtn" onclick="startWriting()">2. ビーコンに接続して書き込む</button>
+
+    <div class="log-area" id="logWindow">【ログ出力】<br></div>
+
+    <script>
+        // Feasycomビーコンの設定用GATTサービスとキャラクタリスティクスUUID（標準仕様）
+        const FEASY_SERVICE_UUID = '0000fff0-0000-1000-8000-00805f9b34fb';
+        const FEASY_WRITE_CHAR   = '0000fff1-0000-1000-8000-00805f9b34fb';
+        const FEASY_PASS_CHAR    = '0000fff2-0000-1000-8000-00805f9b34fb';
+
+        function log(text) {
+            const logWindow = document.getElementById('logWindow');
+            logWindow.innerHTML += `[${new Date().toLocaleTimeString()}] ${text}<br>`;
+            logWindow.scrollTop = logWindow.scrollHeight;
+        }
+
+        function updateStatus() {
+            const lines = document.getElementById('hwidList').value.split('\n').filter(line => line.trim() !== '');
+            document.getElementById('currentStatus').innerText = `未処理のHWID：${lines.length} 件`;
+            document.getElementById('writeBtn').disabled = lines.length === 0;
+        }
+
+        // テキストエリア変更時に残数を更新
+        document.getElementById('hwidList').addEventListener('input', updateStatus);
+        window.onload = updateStatus;
+
+        async function startWriting() {
+            const textarea = document.getElementById('hwidList');
+            const lines = textarea.value.split('\n').filter(line => line.trim() !== '');
+            
+            if (lines.length === 0) {
+                log('エラー: HWIDリストが空です。');
+                return;
+            }
+
+            // リストの先頭から1つHWIDを取り出す
+            const targetHWID = lines[0].trim();
+            if (targetHWID.length !== 10) {
+                log(`エラー: HWID "${targetHWID}" の文字数が正しくありません(10文字必要)。`);
+                return;
+            }
+
+            try {
+                log('ビーコンをスキャン中... ブラウザのポップアップから対象を選択してください。');
+                
+                // 1. 周囲のFeasycomを検索
+                const device = await navigator.bluetooth.requestDevice({
+                    filters: [{ namePrefix: 'FeasyBeacon' }],
+                    optionalServices: [FEASY_SERVICE_UUID]
+                });
+
+                log(`デバイス発見: ${device.name}。接続中...`);
+                const server = await device.gatt.connect();
+                const service = await server.getPrimaryService(FEASY_SERVICE_UUID);
+
+                // 2. パスワード認証 (Feasycomデフォルト: 000000)
+                log('PINコードを送信中...');
+                const passChar = await service.getCharacteristic(FEASY_PASS_CHAR);
+                await passChar.writeValue(new TextEncoder().encode('000000'));
+
+                // 3. LINEビーコン用アドバタイズデータの組み立て
+                log(`HWID: ${targetHWID} を書き込み中...`);
+                
+                // LINE Beacon フォーマット（16進数配列）の作成
+                // 構成: [Length/Type] [LINE UUID] [Service Dataフラグ] [HWID 5バイト] [RSSI]
+                const hexArray = [
+                    0x02, 0x01, 0x06,                         // 一般識別
+                    0x03, 0x03, 0x6F, 0xFE,                   // LINE UUID (リバース表記)
+                    0x0B, 0x16, 0x6F, 0xFE, 0x02              // サービスデータ & LINEフレーム識別子
+                ];
+
+                // 10文字のHWID文字列を5バイトの数値に変換して追加
+                for (let i = 0; i < 10; i += 2) {
+                    hexArray.push(parseInt(targetHWID.substr(i, 2), 16));
+                }
+                
+                hexArray.push(0xBF); // 電波強度 (Measured Power: -65dBm想定)
+
+                // FeasycomのCustomスロット（例としてSlot 1）に書き込むコマンド形式へ変換
+                // ※製品のファームウェア仕様により、生データ（RAW）送信か、ATコマンド（AT+ADVDATA）送信かをパケットとして送ります
+                const dataChar = await service.getCharacteristic(FEASY_WRITE_CHAR);
+                await dataChar.writeValue(new Uint8Array(hexArray));
+
+                log('✨ 書き込み成功！');
+                
+                // 4. 切断処理とリスト更新
+                await device.gatt.disconnect();
+                log('デバイスから切断しました。');
+
+                // 成功したHWIDをリストから削除してUI更新
+                lines.shift();
+                textarea.value = lines.join('\n');
+                updateStatus();
+                log('<b>次（2台目）のビーコンの電源を入れて、再度ボタンを押してください。</b><br>');
+
+            } catch (error) {
+                log(`❌ エラーが発生しました: ${error.message}`);
+            }
+        }
+    </script>
+</body>
+</html>
