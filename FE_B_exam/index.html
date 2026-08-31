@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FE_B_exam | 擬似言語 練習IDE（基本情報・応用情報）</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app">
+    <header class="toolbar">
+      <div class="logo">
+        <span class="logo-icon">◇</span>
+        <span class="logo-text">FE_B_exam</span>
+        <span class="logo-sub">擬似言語 IDE</span>
+      </div>
+      <div class="actions">
+        <button id="btn-run" class="btn primary" title="実行 (Ctrl+Enter)">▶ 実行</button>
+        <button id="btn-step" class="btn" title="ステップ実行">⏭ ステップ</button>
+        <button id="btn-clear-out" class="btn" title="出力クリア">🗑 出力クリア</button>
+        <button id="btn-reset" class="btn" title="変数リセット">↺ リセット</button>
+        <select id="sample-select" class="sample-select">
+          <option value="">サンプルを選択…</option>
+          <option value="sum">1〜n の合計</option>
+          <option value="array_sum">配列の合計</option>
+          <option value="factorial">階乗</option>
+          <option value="fizzbuzz">FizzBuzz風</option>
+          <option value="max">最大値探索</option>
+          <option value="for_nested">九九表</option>
+        </select>
+        <button id="btn-help" class="btn" title="記法リファレンス">? 記法</button>
+      </div>
+    </header>
+
+    <main class="main">
+      <section class="editor-pane">
+        <div class="pane-header">
+          <span>エディタ</span>
+          <span class="status" id="status">準備完了</span>
+        </div>
+        <textarea id="code-editor"></textarea>
+      </section>
+
+      <section class="side-pane">
+        <div class="tabs">
+          <button class="tab active" data-tab="output">出力</button>
+          <button class="tab" data-tab="vars">変数</button>
+          <button class="tab" data-tab="ref">記法リファレンス</button>
+        </div>
+        <div class="tab-content" id="tab-output">
+          <pre id="output" class="console"></pre>
+        </div>
+        <div class="tab-content hidden" id="tab-vars">
+          <div id="vars-view" class="vars-view"></div>
+        </div>
+        <div class="tab-content hidden" id="tab-ref">
+          <div class="ref-content">
+            <h3>擬似言語の記述形式（IPA準拠）</h3>
+            <table class="ref-table">
+              <tr><th>記述形式</th><th>説明</th></tr>
+              <tr><td>○手続名又は関数名</td><td>手続又は関数を宣言する</td></tr>
+              <tr><td>型名: 変数名</td><td>変数を宣言する</td></tr>
+              <tr><td>/* 注釈 */ // 注釈</td><td>注釈を記述する</td></tr>
+              <tr><td>変数名 ← 式</td><td>変数に式の値を代入する</td></tr>
+              <tr><td>手続名(引数, …)</td><td>手続又は関数を呼び出す</td></tr>
+              <tr><td>if (条件式) … elseif … else … endif</td><td>選択処理</td></tr>
+              <tr><td>while (条件式) … endwhile</td><td>前判定繰返し</td></tr>
+              <tr><td>do … while (条件式)</td><td>後判定繰返し</td></tr>
+              <tr><td>for (制御記述) … endfor</td><td>繰返し処理</td></tr>
+            </table>
+            <h4>演算子優先順位（高→低）</h4>
+            <ol>
+              <li>() .</li>
+              <li>not ＋ － （単項）</li>
+              <li>mod × ÷</li>
+              <li>＋ －</li>
+              <li>≠ ≦ ≧ ＜ ＝ ＞</li>
+              <li>and</li>
+              <li>or</li>
+            </ol>
+            <h4>このIDEで使える主な機能</h4>
+            <ul>
+              <li>型: 整数型 / 実数型 / 文字列型 / 論理型 / ○○型の配列</li>
+              <li>代入: ←　比較: ＝ ≠ ＜ ＞ ≦ ≧</li>
+              <li>演算: ＋ － × ÷ mod</li>
+              <li>論理: and or not　定数: true false</li>
+              <li>配列: {1, 2, 3}　アクセス: a[1] （1始まり推奨）</li>
+              <li>for制御例: i を 1 から n まで 1 ずつ増やす</li>
+              <li>組込み: writeLine(値) / 要素数(配列) / 文字列連結は ＋</li>
+              <li>関数: ○関数名(型:引数) … return 値</li>
+            </ul>
+            <p class="note">※ 試験では問題文の注記が優先されます。この環境は練習用の近似実装です。</p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <span>基本情報技術者試験・応用情報技術者試験 擬似言語 練習環境</span>
+      <span>IPA 記述形式準拠（練習用）</span>
+    </footer>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
+  <script src="interpreter.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
