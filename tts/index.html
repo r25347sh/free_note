@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>音声合成ファイル作成 | free_note</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --card: #1a1d27;
+      --border: #2a2e3b;
+      --text: #e6e9f0;
+      --muted: #9aa3b5;
+      --accent: #6c9eff;
+      --accent-hover: #8bb3ff;
+      --success: #4ade80;
+      --danger: #f87171;
+      --radius: 12px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: "Segoe UI", "Hiragino Sans", "Hiragino Kaku Gothic ProN", Meiryo, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.6;
+    }
+
+    .app {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 24px 16px 48px;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 28px;
+    }
+
+    header h1 {
+      font-size: 1.6rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      margin-bottom: 6px;
+    }
+
+    header p {
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+
+    label {
+      display: block;
+      font-size: 0.85rem;
+      color: var(--muted);
+      margin-bottom: 6px;
+      font-weight: 500;
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 140px;
+      background: #12151e;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      padding: 12px 14px;
+      font-size: 1rem;
+      resize: vertical;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    textarea:focus {
+      border-color: var(--accent);
+    }
+
+    .char-count {
+      text-align: right;
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-top: 6px;
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+
+    @media (max-width: 560px) {
+      .row { grid-template-columns: 1fr; }
+    }
+
+    select, input[type="range"] {
+      width: 100%;
+    }
+
+    select {
+      background: #12151e;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      padding: 10px 12px;
+      font-size: 0.95rem;
+      outline: none;
+      cursor: pointer;
+    }
+
+    select:focus {
+      border-color: var(--accent);
+    }
+
+    .slider-group {
+      margin-top: 4px;
+    }
+
+    .slider-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 4px;
+    }
+
+    .slider-header span.value {
+      font-variant-numeric: tabular-nums;
+      color: var(--accent);
+      font-size: 0.9rem;
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      height: 6px;
+      background: var(--border);
+      border-radius: 3px;
+      outline: none;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: var(--accent);
+      cursor: pointer;
+      border: none;
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 8px;
+    }
+
+    button {
+      border: none;
+      border-radius: 8px;
+      padding: 11px 18px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s, transform 0.1s;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    button:active {
+      transform: scale(0.97);
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #0a0c12;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      background: var(--accent-hover);
+    }
+
+    .btn-secondary {
+      background: #2a3040;
+      color: var(--text);
+    }
+
+    .btn-secondary:hover:not(:disabled) {
+      background: #353c50;
+    }
+
+    .btn-success {
+      background: #22c55e;
+      color: #052e16;
+    }
+
+    .btn-success:hover:not(:disabled) {
+      background: #4ade80;
+    }
+
+    .btn-danger {
+      background: #3f1d1d;
+      color: var(--danger);
+    }
+
+    .status {
+      margin-top: 14px;
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      background: #12151e;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      min-height: 42px;
+    }
+
+    .status.info { color: var(--accent); border-color: #2a3a5c; }
+    .status.ok { color: var(--success); border-color: #1a3a2a; }
+    .status.err { color: var(--danger); border-color: #3a1a1a; }
+
+    .voice-info {
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-top: 8px;
+    }
+
+    footer {
+      text-align: center;
+      margin-top: 32px;
+      color: var(--muted);
+      font-size: 0.8rem;
+    }
+
+    footer a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    .note {
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-top: 12px;
+      line-height: 1.5;
+    }
+
+    .note strong {
+      color: #c0c8d8;
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>音声合成ファイル作成</h1>
+      <p>テキストを入力 → 声を選んで再生・MP3ダウンロード</p>
+    </header>
+
+    <div class="card">
+      <label for="text">読み上げるテキスト</label>
+      <textarea id="text" placeholder="ここにテキストを入力してください…（日本語・英語など）">こんにちは。これは音声合成のテストです。free_note の TTS ツールを使っています。</textarea>
+      <div class="char-count"><span id="charCount">0</span> 文字</div>
+    </div>
+
+    <div class="card">
+      <label for="voiceSelect">声の種類（システム音声）</label>
+      <select id="voiceSelect">
+        <option value="">読み込み中…</option>
+      </select>
+      <div class="voice-info" id="voiceInfo">利用可能な声を読み込んでいます…</div>
+
+      <div class="row" style="margin-top: 16px;">
+        <div class="slider-group">
+          <div class="slider-header">
+            <label for="rate">話速</label>
+            <span class="value" id="rateVal">1.0</span>
+          </div>
+          <input type="range" id="rate" min="0.5" max="2" step="0.1" value="1">
+        </div>
+        <div class="slider-group">
+          <div class="slider-header">
+            <label for="pitch">ピッチ</label>
+            <span class="value" id="pitchVal">1.0</span>
+          </div>
+          <input type="range" id="pitch" min="0.5" max="2" step="0.1" value="1">
+        </div>
+      </div>
+
+      <div class="slider-group" style="margin-top: 12px;">
+        <div class="slider-header">
+          <label for="volume">音量</label>
+          <span class="value" id="volumeVal">1.0</span>
+        </div>
+        <input type="range" id="volume" min="0" max="1" step="0.05" value="1">
+      </div>
+    </div>
+
+    <div class="card">
+      <label>操作</label>
+      <div class="actions">
+        <button type="button" class="btn-primary" id="btnSpeak">▶ 再生</button>
+        <button type="button" class="btn-danger" id="btnStop">■ 停止</button>
+        <button type="button" class="btn-success" id="btnDownload">↓ MP3ダウンロード</button>
+      </div>
+
+      <div class="status" id="status">準備完了。テキストを入力して「再生」または「MP3ダウンロード」を押してください。</div>
+
+      <p class="note">
+        <strong>声の種類</strong>はお使いの端末・ブラウザに入っているシステム音声を一覧表示します（日本語の声が複数ある場合もあります）。<br>
+        <strong>MP3ダウンロード</strong>は Google Translate TTS を利用します（1回あたりおおよそ200文字前後まで推奨。長い場合は分割してご利用ください）。
+      </p>
+    </div>
+
+    <footer>
+      free_note / TTS Tool ·
+      <a href="https://github.com/r25347sh/free_note" target="_blank" rel="noopener">GitHub</a>
+    </footer>
+  </div>
+
+  <script>
+    const synth = window.speechSynthesis;
+    const textEl = document.getElementById('text');
+    const voiceSelect = document.getElementById('voiceSelect');
+    const voiceInfo = document.getElementById('voiceInfo');
+    const rateEl = document.getElementById('rate');
+    const pitchEl = document.getElementById('pitch');
+    const volumeEl = document.getElementById('volume');
+    const rateVal = document.getElementById('rateVal');
+    const pitchVal = document.getElementById('pitchVal');
+    const volumeVal = document.getElementById('volumeVal');
+    const charCount = document.getElementById('charCount');
+    const statusEl = document.getElementById('status');
+    const btnSpeak = document.getElementById('btnSpeak');
+    const btnStop = document.getElementById('btnStop');
+    const btnDownload = document.getElementById('btnDownload');
+
+    let voices = [];
+    let currentUtterance = null;
+
+    function setStatus(msg, type = '') {
+      statusEl.textContent = msg;
+      statusEl.className = 'status' + (type ? ' ' + type : '');
+    }
+
+    function updateCharCount() {
+      charCount.textContent = textEl.value.length;
+    }
+
+    textEl.addEventListener('input', updateCharCount);
+    updateCharCount();
+
+    rateEl.addEventListener('input', () => { rateVal.textContent = parseFloat(rateEl.value).toFixed(1); });
+    pitchEl.addEventListener('input', () => { pitchVal.textContent = parseFloat(pitchEl.value).toFixed(1); });
+    volumeEl.addEventListener('input', () => { volumeVal.textContent = parseFloat(volumeEl.value).toFixed(2); });
+
+    function loadVoices() {
+      voices = synth.getVoices();
+
+      // 日本語を優先して並べ替え
+      voices.sort((a, b) => {
+        const aJa = a.lang.startsWith('ja') ? 0 : 1;
+        const bJa = b.lang.startsWith('ja') ? 0 : 1;
+        if (aJa !== bJa) return aJa - bJa;
+        return a.name.localeCompare(b.name);
+      });
+
+      voiceSelect.innerHTML = '';
+
+      if (voices.length === 0) {
+        voiceSelect.innerHTML = '<option value="">声が検出されませんでした</option>';
+        voiceInfo.textContent = 'このブラウザでは利用可能な声がありません。';
+        return;
+      }
+
+      voices.forEach((v, i) => {
+        const opt = document.createElement('option');
+        opt.value = i;
+        const local = v.localService ? 'ローカル' : 'ネットワーク';
+        opt.textContent = `${v.name} (${v.lang}) [${local}]`;
+        voiceSelect.appendChild(opt);
+      });
+
+      // 日本語の声があれば最初のものを選択
+      const jaIndex = voices.findIndex(v => v.lang.startsWith('ja'));
+      if (jaIndex >= 0) voiceSelect.value = jaIndex;
+
+      const jaCount = voices.filter(v => v.lang.startsWith('ja')).length;
+      voiceInfo.textContent = `合計 ${voices.length} 種類の声が利用可能です（うち日本語: ${jaCount}）`;
+    }
+
+    // Chrome などでは voiceschanged が必要
+    if (synth.onvoiceschanged !== undefined) {
+      synth.onvoiceschanged = loadVoices;
+    }
+    loadVoices();
+    // 念のため遅延でもう一度
+    setTimeout(loadVoices, 500);
+
+    function speak() {
+      const text = textEl.value.trim();
+      if (!text) {
+        setStatus('テキストを入力してください。', 'err');
+        return;
+      }
+
+      synth.cancel();
+
+      const utter = new SpeechSynthesisUtterance(text);
+      const idx = parseInt(voiceSelect.value, 10);
+      if (!isNaN(idx) && voices[idx]) {
+        utter.voice = voices[idx];
+        utter.lang = voices[idx].lang;
+      }
+      utter.rate = parseFloat(rateEl.value);
+      utter.pitch = parseFloat(pitchEl.value);
+      utter.volume = parseFloat(volumeEl.value);
+
+      utter.onstart = () => setStatus('再生中…', 'info');
+      utter.onend = () => setStatus('再生が終了しました。', 'ok');
+      utter.onerror = (e) => setStatus('再生エラー: ' + (e.error || 'unknown'), 'err');
+
+      currentUtterance = utter;
+      synth.speak(utter);
+    }
+
+    function stop() {
+      synth.cancel();
+      setStatus('停止しました。', 'info');
+    }
+
+    // MP3ダウンロード（Google Translate TTS）
+    // ブラウザのCORS制限があるため、<a download> で試行。長いテキストは分割推奨。
+    async function downloadMp3() {
+      const text = textEl.value.trim();
+      if (!text) {
+        setStatus('テキストを入力してください。', 'err');
+        return;
+      }
+
+      if (text.length > 220) {
+        setStatus('MP3は200文字前後までを推奨します。長い場合は分割してダウンロードしてください。', 'err');
+        // それでも続行は可能だが警告
+      }
+
+      setStatus('MP3を生成しています…', 'info');
+      btnDownload.disabled = true;
+
+      try {
+        // 言語推定（簡易）
+        const hasJa = /[\u3040-\u30ff\u3400-\u9fff]/.test(text);
+        const tl = hasJa ? 'ja' : 'en';
+
+        // Google TTS URL（非公式・短文向け）
+        const url = 'https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&q='
+          + encodeURIComponent(text)
+          + '&tl=' + tl
+          + '&ttsspeed=1';
+
+        // fetch で取得を試みる（CORSで失敗する可能性あり）
+        let blob = null;
+        try {
+          const res = await fetch(url, {
+            mode: 'cors',
+            credentials: 'omit',
+            headers: { 'Accept': 'audio/mpeg' }
+          });
+          if (res.ok) {
+            blob = await res.blob();
+          }
+        } catch (e) {
+          // CORS失敗時はフォールバック
+        }
+
+        if (blob && blob.size > 1000) {
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = 'speech_' + Date.now() + '.mp3';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(a.href);
+          setStatus('MP3のダウンロードを開始しました。', 'ok');
+        } else {
+          // フォールバック: 新しいタブで開く / download属性を試す
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'speech.mp3';
+          a.target = '_blank';
+          a.rel = 'noopener';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          setStatus('MP3リンクを開きました。ブラウザで「名前を付けて保存」してください（CORS制限のため直接保存できない場合があります）。', 'info');
+        }
+      } catch (err) {
+        setStatus('ダウンロードに失敗しました: ' + err.message, 'err');
+      } finally {
+        btnDownload.disabled = false;
+      }
+    }
+
+    btnSpeak.addEventListener('click', speak);
+    btnStop.addEventListener('click', stop);
+    btnDownload.addEventListener('click', downloadMp3);
+
+    // Ctrl+Enter で再生
+    textEl.addEventListener('keydown', (e) => {
+      if (e.ctrlKey && e.key === 'Enter') {
+        e.preventDefault();
+        speak();
+      }
+    });
+  </script>
+</body>
+</html>
