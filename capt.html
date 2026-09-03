@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>自動スクロール動画キャプチャ</title>
+    <style>
+        /* 画面上部に固定される制御パネルのスタイル */
+        #capture-panel {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            z-index: 999999;
+            background: rgba(0, 0, 0, 0.85);
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: sans-serif;
+            font-size: 14px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            max-width: 300px;
+        }
+        #capture-panel h3 { margin: 0 0 10px 0; font-size: 16px; border-bottom: 1px solid #555; padding-bottom: 5px; }
+        #capture-panel label { display: block; margin-bottom: 8px; }
+        #capture-panel input { width: 100%; margin-top: 4px; box-sizing: border-box; padding: 4px; }
+        #capture-panel button { width: 100%; padding: 8px; background: #007bff; color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; margin-top: 5px; }
+        #capture-panel button:disabled { background: #555; cursor: not-allowed; }
+        #status-msg { margin-top: 8px; font-weight: bold; color: #ffc107; text-align: center; }
+
+        /* スクロールを確認するためのダミーコンテンツ（実際の自作HTMLでは削除してください） */
+        .dummy-content {
+            background: linear-gradient(to bottom, #f0f4f8, #d9e2ec, #bcccdc, #9fb3c8, #829ab1, #627d98, #486581, #334e68, #243b53, #102a43);
+            height: 3000px; /* 縦に長いコンテンツ */
+            padding: 50px;
+        }
+        .dummy-content h1 { color: #333; text-align: center; margin-top: 100px; }
+        .dummy-content p { color: #fff; text-align: center; margin-top: 800px; font-size: 24px; }
+    </style>
+</head>
+<body>
+
+    <!-- 制御パネル -->
+    <div id="capture-panel">
+        <h3>動画キャプチャ設定</h3>
+        <label>
+            動画の全体の長さ (秒):
+            <input type="number" id="duration-input" value="10" min="1">
+        </label>
+        <label>
+            スクロール開始位置 (px):
+            <input type="number" id="start-px-input" value="0" min="0">
+        </label>
+        <label>
+            スクロール終了位置 (px):
+            <input type="number" id="end-px-input" value="2000" min="0">
+        </label>
+        <button id="start-btn" disabled>読み込み中...</button>
+        <div id="status-msg">ページ読み込みを待っています...</div>
+    </div>
+
+    <!-- ここから自作のHTMLコンテンツ（テスト用のダミー） -->
+    <div class="dummy-content">
+        <h1>スクロール動画作成テスト</h1>
+        <p>↓ スクロール中（中間地点） ↓</p>
+        <p style="margin-top: 100px;">↓ さらにスクロール中 ↓</p>
+        <p style="margin-top: 800px;">🎉 キャプチャ終了地点付近 🎉</p>
+    </div>
+    <!-- ここまで自作のHTMLコンテンツ -->
+
+    <script>
+        // ページの全リソース（画像、CSSなど）が完全に読み込まれてから実行
+        window.onload = function() {
+            const startBtn = document.getElementById('start-btn');
+            const statusMsg = document.getElementById('status-msg');
+            
+            // 読み込み完了後にボタンを有効化
+            startBtn.disabled = false;
+            startBtn.innerText = '録画＆自動スクロール開始';
+            statusMsg.innerText = '準備完了！';
+
+            // 終了位置のデフォルト値を、ページの最大スクロール可能高さに合わせる調整
+            const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
+            document.getElementById('end-px-input').value = Math.max(0, maxScroll);
+
+            startBtn.addEventListener('click', async () => {
+                // 設定値の取得
+                const durationSec = parseFloat(document.getElementById('duration-input').value);
+                const startPx = parseInt(document.getElementById('start-px-input').value);
+                const endPx = parseInt(document.getElementById('end-px-input').value);
+                
+                if (isNaN(durationSec) || isNaN(startPx) || isNaN(endPx)) {
+                    alert('数値を正しく入力してください。');
+                    return;
+                }
+
+                // 録画中のUI非表示処理（制御パネル自体が動画に映らないように隠す）
+                const panel = document.getElementById('capture-panel');
+                panel.style.opacity = '0.1'; // 完全に消すと進捗が見えないため極薄に（映したくない場合は display='none'）
+                panel.style.pointerEvents = 'none';
+
+                try {
+                    // 1. 画面キャプチャのストリームを取得（ブラウザの画面共有機能を利用）
+                    // 実行時にポップアップが出るので「このタブ」を選択してください
+                    statusMsg.innerText = '画面共有で「このタブ」を選択してください';
+                    const stream = await navigator.mediaDevices.getDisplayMedia({
+                        video: {
+                            displaySurface: "browser",
+                            frameRate: { ideal: 60, max: 60 } // スムーズな60fpsを目指す
+                        },
+                        audio: false
+                    });
+
+                    // 2. MediaRecorderの準備 (WebM形式)
+                    const recorder = new MediaRecorder(stream, { mimeType: 'video/webm; codecs=vp9' });
+                    const chunks = [];
+                    recorder.ondataavailable = e => chunks.push(e.data);
+                    
+                    // 録画終了時のダウンロード処理
+                    recorder.onstop = () => {
+                        const blob = new Blob(chunks, { type: 'video/webm' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `scroll-animation-${Date.now()}.webm`;
+                        a.click();
+                        URL.revokeObjectURL(url);
+                        
+                        // パネルを元に戻す
+                        panel.style.opacity = '1';
+                        panel.style.pointerEvents = 'auto';
+                        statusMsg.innerText = 'ダウンロード完了！';
+                    };
+
+                    // 初期位置へジャンプ
+                    window.scrollTo(0, startPx);
+                    
+                    // 3. 録画とスクロールの開始
+                    recorder.start();
+                    statusMsg.innerText = '録画中...';
+
+                    const startTime = performance.now();
+                    const durationMs = durationSec * 1000;
+
+                    // アニメーションフレームを使った滑らかなスクロール処理
+                    function step(now) {
+                        const elapsed = now - startTime;
+                        const progress = Math.min(elapsed / durationMs, 1); // 0から1の進捗率
+
+                        // 現在のスクロール位置を計算（線形補間）
+                        const currentPx = startPx + (endPx - startPx) * progress;
+                        window.scrollTo(0, currentPx);
+
+                        if (progress < 1) {
+                            requestAnimationFrame(step);
+                        } else {
+                            // 指定時間に達したら停止
+                            recorder.stop();
+                            stream.getTracks().forEach(track => track.stop()); // キャプチャ終了
+                        }
+                    }
+
+                    // スクロールアニメーション開始
+                    requestAnimationFrame(step);
+
+                } catch (err) {
+                    console.error("エラーが発生しました:", err);
+                    alert("キャプチャの開始に失敗しました。画面共有を許可してください。");
+                    panel.style.opacity = '1';
+                    panel.style.pointerEvents = 'auto';
+                    statusMsg.innerText = 'エラーにより中断';
+                }
+            });
+        };
+    </script>
+</body>
+</html>
