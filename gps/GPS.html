@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Extreme High-Accuracy GPS Monitor</title>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --text-color: #f8fafc;
+            --text-muted: #94a3b8;
+            --primary-color: #38bdf8;
+            --success-color: #4ade80;
+            --warning-color: #facc15;
+            --danger-color: #f87171;
+        }
+
+        body {
+            font-family: SFProDisplay,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 16px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            box-sizing: border-box;
+        }
+
+        .container {
+            background-color: var(--card-bg);
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            padding: 24px;
+            width: 100%;
+            max-width: 420px;
+        }
+
+        h1 {
+            font-size: 1.3rem;
+            margin-top: 0;
+            margin-bottom: 20px;
+            text-align: center;
+            letter-spacing: 0.05em;
+            color: var(--primary-color);
+        }
+
+        .signal-container {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background-color: rgba(0, 0, 0, 0.2);
+            padding: 16px;
+            border-radius: 14px;
+            margin-bottom: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .signal-label {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+        }
+
+        .signal-status {
+            font-weight: bold;
+            font-size: 1.2rem;
+        }
+
+        .signal-bars {
+            display: flex;
+            align-items: flex-end;
+            gap: 5px;
+            height: 28px;
+        }
+
+        .bar {
+            width: 7px;
+            background-color: #334155;
+            border-radius: 3px;
+            transition: background-color 0.2s;
+        }
+        .bar1 { height: 25%; }
+        .bar2 { height: 50%; }
+        .bar3 { height: 75%; }
+        .bar4 { height: 100%; }
+
+        .status-strong { color: var(--success-color); }
+        .status-medium { color: var(--warning-color); }
+        .status-weak { color: var(--danger-color); }
+        .status-searching { color: var(--primary-color); }
+
+        .data-list {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        .data-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #334155;
+            padding-bottom: 10px;
+        }
+
+        .data-item:last-child {
+            border-bottom: none;
+            padding-bottom: 0;
+        }
+
+        .label {
+            color: var(--text-muted);
+            font-size: 0.85rem;
+        }
+
+        .value {
+            font-family: "SF Mono", Courier, monospace;
+            font-size: 1.05rem;
+            font-weight: 600;
+        }
+
+        .badge {
+            font-size: 0.75rem;
+            padding: 2px 6px;
+            border-radius: 4px;
+            background-color: #334155;
+            color: var(--primary-color);
+            margin-left: 6px;
+            vertical-align: middle;
+        }
+
+        .error-message {
+            color: var(--danger-color);
+            background-color: rgba(248, 113, 113, 0.1);
+            border: 1px solid rgba(248, 113, 113, 0.2);
+            border-radius: 10px;
+            padding: 12px;
+            font-size: 0.85rem;
+            margin-top: 15px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>GPS ULTRA MONITOR</h1>
+
+    <div class="signal-container">
+        <div>
+            <div class="signal-label">ノイズ除去済・推定強度</div>
+            <div id="js-status-text" class="signal-status status-searching">スキャン中...</div>
+        </div>
+        <div class="signal-bars" id="js-signal-bars">
+            <div class="bar bar1"></div>
+            <div class="bar bar2"></div>
+            <div class="bar bar3"></div>
+            <div class="bar bar4"></div>
+        </div>
+    </div>
+
+    <div class="data-list">
+        <div class="data-item">
+            <span class="label">高精度 緯度</span>
+            <span id="js-lat" class="value">--</span>
+        </div>
+        <div class="data-item">
+            <span class="label">高精度 経度</span>
+            <span id="js-lng" class="value">--</span>
+        </div>
+        <div class="data-item">
+            <span class="label">現在誤差 (生データ)</span>
+            <span id="js-accuracy" class="value">--</span>
+        </div>
+        <div class="data-item">
+            <span class="label">平均誤差 (補正済)</span>
+            <span id="js-filtered-accuracy" class="value">--</span>
+        </div>
+        <div class="data-item">
+            <span class="label">リクエスト回数<span class="badge">最速ループ</span></span>
+            <span id="js-count" class="value">0</span>
+        </div>
+    </div>
+
+    <div id="js-error" class="error-message"></div>
+</div>
+
+<script>
+    const latEl = document.getElementById('js-lat');
+    const lngEl = document.getElementById('js-lng');
+    const accuracyEl = document.getElementById('js-accuracy');
+    const filteredAccuracyEl = document.getElementById('js-filtered-accuracy');
+    const countEl = document.getElementById('js-count');
+    const statusTextEl = document.getElementById('js-status-text');
+    const signalBarsEl = document.getElementById('js-signal-bars');
+    const errorEl = document.getElementById('js-error');
+
+    let requestCount = 0;
+    
+    // 精度向上のためのフィルター用変数（移動平均）
+    let filteredLat = null;
+    let filteredLng = null;
+    let filteredAcc = null;
+    const FILTER_FACTOR = 0.3; // 補正係数（小さいほど滑らかになりノイズが消えるが、追従性は落ちる）
+
+    // GPS取得のオプション（最高精度設定）
+    const gpsOptions = {
+        enableHighAccuracy: true, 
+        timeout: 2000, // 高速ループのためタイムアウトを2秒に短縮
+        maximumAge: 0  // キャッシュを一切許可しない
+    };
+
+    // UIのバー更新
+    function updateSignalUI(acc) {
+        const bars = signalBarsEl.querySelectorAll('.bar');
+        bars.forEach(bar => bar.style.backgroundColor = '#334155');
+        statusTextEl.className = 'signal-status';
+
+        if (acc <= 10) { // 基準をさらに厳格化 (10m以内)
+            statusTextEl.textContent = '極めて強い (±' + acc.toFixed(1) + 'm)';
+            statusTextEl.classList.add('status-strong');
+            bars.forEach(bar => bar.style.backgroundColor = 'var(--success-color)');
+        } else if (acc <= 30) {
+            statusTextEl.textContent = '良好 (±' + acc.toFixed(1) + 'm)';
+            statusTextEl.classList.add('status-strong');
+            bars[0].style.backgroundColor = 'var(--success-color)';
+            bars[1].style.backgroundColor = 'var(--success-color)';
+            bars[2].style.backgroundColor = 'var(--success-color)';
+        } else if (acc <= 60) {
+            statusTextEl.textContent = '普通 (±' + acc.toFixed(1) + 'm)';
+            statusTextEl.classList.add('status-warning');
+            bars[0].style.backgroundColor = 'var(--warning-color)';
+            bars[1].style.backgroundColor = 'var(--warning-color)';
+        } else {
+            statusTextEl.textContent = '弱い (±' + acc.toFixed(1) + 'm)';
+            statusTextEl.classList.add('status-weak');
+            bars[0].style.backgroundColor = 'var(--danger-color)';
+        }
+    }
+
+    // 位置情報リクエスト関数
+    function requestLocation() {
+        requestCount++;
+        countEl.textContent = requestCount;
+
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                errorEl.style.display = 'none';
+                
+                const rawLat = position.coords.latitude;
+                const rawLng = position.coords.longitude;
+                const rawAcc = position.coords.accuracy;
+
+                // 【精度向上ロジック】初回はそのまま代入、2回目以降は低パスフィルターを通す
+                if (filteredLat === null) {
+                    filteredLat = rawLat;
+                    filteredLng = rawLng;
+                    filteredAcc = rawAcc;
+                } else {
+                    filteredLat = filteredLat + FILTER_FACTOR * (rawLat - filteredLat);
+                    filteredLng = filteredLng + FILTER_FACTOR * (rawLng - filteredLng);
+                    filteredAcc = filteredAcc + FILTER_FACTOR * (rawAcc - filteredAcc);
+                }
+
+                // 画面表示（小数点以下7桁まで表示＝約1cm〜11cmレベルの解像度）
+                latEl.textContent = filteredLat.toFixed(7);
+                lngEl.textContent = filteredLng.toFixed(7);
+                accuracyEl.textContent = '±' + rawAcc.toFixed(1) + ' m';
+                filteredAccuracyEl.textContent = '±' + filteredAcc.toFixed(1) + ' m';
+
+                updateSignalUI(filteredAcc);
+            },
+            (error) => {
+                // バックグラウンドでの超高速ループ中の軽微なタイムアウト等は無視して継続
+                if (error.code !== error.TIMEOUT) {
+                    errorEl.style.display = 'block';
+                    errorEl.textContent = `エラー (${error.code}): ${error.message}`;
+                }
+            },
+            gpsOptions
+        );
+    }
+
+    // 初期化
+    function init() {
+        if ('geolocation' in navigator) {
+            // 1回目を即時実行
+            requestLocation();
+            // 0ミリ秒指定でブラウザの最速限界周期（タスクキューの隙間）でループ実行
+            setInterval(requestLocation, 0);
+        } else {
+            errorEl.style.display = 'block';
+            errorEl.textContent = 'お使いのブラウザは対応していません。';
+        }
+    }
+
+    window.addEventListener('DOMContentLoaded', init);
+</script>
+
+</body>
+</html>
