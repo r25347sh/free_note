@@ -2,173 +2,225 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>自動スクロール動画キャプチャ</title>
+    <title>超高解像度・ページ自動スクロール撮影ツール</title>
     <style>
-        /* 画面上部に固定される制御パネルのスタイル */
-        #capture-panel {
-            position: fixed;
-            top: 10px;
-            left: 10px;
-            z-index: 999999;
-            background: rgba(0, 0, 0, 0.85);
-            color: white;
-            padding: 15px;
-            border-radius: 8px;
-            font-family: sans-serif;
-            font-size: 14px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
-            max-width: 300px;
-        }
-        #capture-panel h3 { margin: 0 0 10px 0; font-size: 16px; border-bottom: 1px solid #555; padding-bottom: 5px; }
-        #capture-panel label { display: block; margin-bottom: 8px; }
-        #capture-panel input { width: 100%; margin-top: 4px; box-sizing: border-box; padding: 4px; }
-        #capture-panel button { width: 100%; padding: 8px; background: #007bff; color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; margin-top: 5px; }
-        #capture-panel button:disabled { background: #555; cursor: not-allowed; }
-        #status-msg { margin-top: 8px; font-weight: bold; color: #ffc107; text-align: center; }
+        body, html { margin: 0; padding: 0; height: 100%; font-family: sans-serif; background: #1a1a1a; color: #fff; overflow: hidden; }
+        /* レイアウト */
+        #container { display: flex; flex-direction: column; height: 100vh; }
+        
+        /* 設定パネル */
+        #control-panel { background: #2d2d2d; padding: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.5); z-index: 10; display: flex; flex-wrap: wrap; gap: 15px; align-items: flex-end; }
+        .input-group { display: flex; flex-direction: column; gap: 5px; }
+        .input-group.url { flex: 1; min-width: 300px; }
+        label { font-size: 12px; color: #ccc; font-weight: bold; }
+        input { background: #444; border: 1px solid #555; color: #fff; padding: 8px; border-radius: 4px; font-size: 14px; }
+        input:focus { outline: none; border-color: #007bff; }
+        
+        /* ボタン類 */
+        button { padding: 8px 16px; font-weight: bold; border-radius: 4px; border: none; cursor: pointer; font-size: 14px; transition: 0.2s; }
+        #load-btn { background: #28a745; color: white; }
+        #load-btn:hover { background: #218838; }
+        #start-btn { background: #007bff; color: white; }
+        #start-btn:hover { background: #0069d9; }
+        button:disabled { background: #555 !important; color: #aaa; cursor: not-allowed; }
+        
+        #status { font-size: 13px; color: #ffc107; min-width: 150px; align-self: center; }
 
-        /* スクロールを確認するためのダミーコンテンツ（実際の自作HTMLでは削除してください） */
-        .dummy-content {
-            background: linear-gradient(to bottom, #f0f4f8, #d9e2ec, #bcccdc, #9fb3c8, #829ab1, #627d98, #486581, #334e68, #243b53, #102a43);
-            height: 3000px; /* 縦に長いコンテンツ */
-            padding: 50px;
+        /* ターゲットページを表示するエリア */
+        #view-area { flex: 1; background: #fff; position: relative; }
+        /* 4K（3840x2160）などの超高解像度を強制するコンテナ */
+        #resolution-scaler {
+            position: absolute;
+            top: 0;
+            left: 0;
+            transform-origin: top left;
+            /* JSで動的に幅と高さを4K等に変えます */
         }
-        .dummy-content h1 { color: #333; text-align: center; margin-top: 100px; }
-        .dummy-content p { color: #fff; text-align: center; margin-top: 800px; font-size: 24px; }
+        iframe { width: 100%; height: 100%; border: none; background: #fff; }
     </style>
 </head>
 <body>
 
-    <!-- 制御パネル -->
-    <div id="capture-panel">
-        <h3>動画キャプチャ設定</h3>
-        <label>
-            動画の全体の長さ (秒):
-            <input type="number" id="duration-input" value="10" min="1">
-        </label>
-        <label>
-            スクロール開始位置 (px):
-            <input type="number" id="start-px-input" value="0" min="0">
-        </label>
-        <label>
-            スクロール終了位置 (px):
-            <input type="number" id="end-px-input" value="2000" min="0">
-        </label>
-        <button id="start-btn" disabled>読み込み中...</button>
-        <div id="status-msg">ページ読み込みを待っています...</div>
-    </div>
+    <div id="container">
+        <!-- 上部設定パネル -->
+        <div id="control-panel">
+            <div class="input-group url">
+                <label>撮影するGitHub PagesのURL:</label>
+                <input type="url" id="page-url" value="" placeholder="https://github.io">
+            </div>
+            <button id="load-btn">ページ読み込み</button>
+            
+            <div class="input-group">
+                <label>動画の長さ (秒):</label>
+                <input type="number" id="duration" value="10" min="1" style="width: 80px;">
+            </div>
+            <div class="input-group">
+                <label>終了位置 (px):</label>
+                <input type="number" id="end-px" value="3000" min="0" style="width: 100px;">
+            </div>
+            <div class="input-group">
+                <label>撮影解像度 (横幅):</label>
+                <!-- 4K撮影時は3840を指定 -->
+                <input type="number" id="capture-width" value="3840" min="1280" style="width: 90px;">
+            </div>
+            
+            <button id="start-btn" disabled>録画＆スクロール開始</button>
+            <div id="status">URLを入力して読み込んでください</div>
+        </div>
 
-    <!-- ここから自作のHTMLコンテンツ（テスト用のダミー） -->
-    <div class="dummy-content">
-        <h1>スクロール動画作成テスト</h1>
-        <p>↓ スクロール中（中間地点） ↓</p>
-        <p style="margin-top: 100px;">↓ さらにスクロール中 ↓</p>
-        <p style="margin-top: 800px;">🎉 キャプチャ終了地点付近 🎉</p>
+        <!-- ページ表示エリア -->
+        <div id="view-area">
+            <div id="resolution-scaler">
+                <iframe id="target-frame" src="about:blank"></div>
+            </div>
+        </div>
     </div>
-    <!-- ここまで自作のHTMLコンテンツ -->
 
     <script>
-        // ページの全リソース（画像、CSSなど）が完全に読み込まれてから実行
-        window.onload = function() {
-            const startBtn = document.getElementById('start-btn');
-            const statusMsg = document.getElementById('status-msg');
+        const pageUrlInput = document.getElementById('page-url');
+        const loadBtn = document.getElementById('load-btn');
+        const startBtn = document.getElementById('start-btn');
+        const durationInput = document.getElementById('duration');
+        const endPxInput = document.getElementById('end-px');
+        const widthInput = document.getElementById('capture-width');
+        const status = document.getElementById('status');
+        const iframe = document.getElementById('target-frame');
+        const scaler = document.getElementById('resolution-scaler');
+        const viewArea = document.getElementById('view-area');
+
+        let targetWindow = null;
+
+        // 1. ページをiframeに読み込む
+        loadBtn.addEventListener('click', () => {
+            const url = pageUrlInput.value.trim();
+            if (!url) return alert('URLを入力してください');
+
+            status.innerText = 'ページを読み込み中...（完了を待っています）';
+            startBtn.disabled = true;
             
-            // 読み込み完了後にボタンを有効化
-            startBtn.disabled = false;
-            startBtn.innerText = '録画＆自動スクロール開始';
-            statusMsg.innerText = '準備完了！';
+            // 解像度の設定（例: 4K=3840x2160）
+            const targetWidth = parseInt(widthInput.value) || 3840;
+            // 4Kの標準比率16:9で高さを計算
+            const targetHeight = Math.round(targetWidth * (9 / 16)); 
 
-            // 終了位置のデフォルト値を、ページの最大スクロール可能高さに合わせる調整
-            const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
-            document.getElementById('end-px-input').value = Math.max(0, maxScroll);
+            // iframeを超高解像度サイズに固定
+            scaler.style.width = targetWidth + 'px';
+            scaler.style.height = targetHeight + 'px';
 
-            startBtn.addEventListener('click', async () => {
-                // 設定値の取得
-                const durationSec = parseFloat(document.getElementById('duration-input').value);
-                const startPx = parseInt(document.getElementById('start-px-input').value);
-                const endPx = parseInt(document.getElementById('end-px-input').value);
+            // 自分の画面に収まるように縮小表示（プレビュー用。実際の解像度は維持されます）
+            const scale = viewArea.clientWidth / targetWidth;
+            scaler.style.transform = `scale(${scale})`;
+
+            // iframeのロード
+            iframe.src = url;
+        });
+
+        // iframeの読み込みが「完全に終了」したらボタンを有効化
+        iframe.onload = () => {
+            if (iframe.src === 'about:blank') return;
+            
+            try {
+                targetWindow = iframe.contentWindow;
+                // テスト的にスクロール量を取得してみる（CORSエラーチェック）
+                const docHeight = targetWindow.document.documentElement.scrollHeight;
+                endPxInput.value = docHeight - targetWindow.innerHeight;
                 
-                if (isNaN(durationSec) || isNaN(startPx) || isNaN(endPx)) {
-                    alert('数値を正しく入力してください。');
-                    return;
-                }
+                status.innerText = '読み込み完了！録画可能です。';
+                startBtn.disabled = false;
+            } catch (e) {
+                // ドメインが違う場合の警告
+                status.innerText = '【注意】別ドメインのため制限あり';
+                startBtn.disabled = false; 
+                console.warn("CORS制限により、自動での高さ取得ができません。終了位置(px)を手動で入力してください。");
+                alert("ツールと異なるドメインのサイトです。自動スクロールが動かない場合は、このツールファイルをGitHub Pagesの同じリポジトリ（同じドメイン内）にアップロードしてそこから開いてください。");
+            }
+        };
 
-                // 録画中のUI非表示処理（制御パネル自体が動画に映らないように隠す）
-                const panel = document.getElementById('capture-panel');
-                panel.style.opacity = '0.1'; // 完全に消すと進捗が見えないため極薄に（映したくない場合は display='none'）
-                panel.style.pointerEvents = 'none';
+        // 2. 録画＆スクロール実行
+        startBtn.addEventListener('click', async () => {
+            const durationSec = parseFloat(durationInput.value);
+            const endPx = parseInt(endPxInput.value);
+            const targetWidth = parseInt(widthInput.value);
+            const targetHeight = Math.round(targetWidth * (9 / 16));
 
-                try {
-                    // 1. 画面キャプチャのストリームを取得（ブラウザの画面共有機能を利用）
-                    // 実行時にポップアップが出るので「このタブ」を選択してください
-                    statusMsg.innerText = '画面共有で「このタブ」を選択してください';
-                    const stream = await navigator.mediaDevices.getDisplayMedia({
-                        video: {
-                            displaySurface: "browser",
-                            frameRate: { ideal: 60, max: 60 } // スムーズな60fpsを目指す
-                        },
-                        audio: false
-                    });
+            status.innerText = '画面共有で「このタブ」を選択してください...';
 
-                    // 2. MediaRecorderの準備 (WebM形式)
-                    const recorder = new MediaRecorder(stream, { mimeType: 'video/webm; codecs=vp9' });
-                    const chunks = [];
-                    recorder.ondataavailable = e => chunks.push(e.data);
-                    
-                    // 録画終了時のダウンロード処理
-                    recorder.onstop = () => {
-                        const blob = new Blob(chunks, { type: 'video/webm' });
-                        const url = URL.createObjectURL(blob);
-                        const a = document.createElement('a');
-                        a.href = url;
-                        a.download = `scroll-animation-${Date.now()}.webm`;
-                        a.click();
-                        URL.revokeObjectURL(url);
-                        
-                        // パネルを元に戻す
-                        panel.style.opacity = '1';
-                        panel.style.pointerEvents = 'auto';
-                        statusMsg.innerText = 'ダウンロード完了！';
-                    };
+            try {
+                // 超高解像度(4Kなど)・高フレームレート(60fps)のキャプチャ要求
+                const stream = await navigator.mediaDevices.getDisplayMedia({
+                    video: {
+                        displaySurface: "browser",
+                        width: { ideal: targetWidth, max: targetWidth },
+                        height: { ideal: targetHeight, max: targetHeight },
+                        frameRate: { ideal: 60, max: 60 }
+                    },
+                    audio: false
+                });
 
-                    // 初期位置へジャンプ
-                    window.scrollTo(0, startPx);
-                    
-                    // 3. 録画とスクロールの開始
-                    recorder.start();
-                    statusMsg.innerText = '録画中...';
+                // 最高画質ビットレート設定 (4K対応のため50Mbps = 50,000,000 bps)
+                const recorder = new MediaRecorder(stream, { 
+                    mimeType: 'video/webm; codecs=vp9',
+                    videoBitsPerSecond: 50000000 
+                });
+                
+                const chunks = [];
+                recorder.ondataavailable = e => chunks.push(e.data);
+                
+                recorder.onstop = () => {
+                    const blob = new Blob(chunks, { type: 'video/webm' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `scroll-4k-${Date.now()}.webm`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    status.innerText = '動画をダウンロードしました！';
+                    document.getElementById('control-panel').style.display = 'flex';
+                };
 
-                    const startTime = performance.now();
-                    const durationMs = durationSec * 1000;
+                // 録画中のコントロールパネルを非表示にする（動画への映り込み防止）
+                document.getElementById('control-panel').style.display = 'none';
 
-                    // アニメーションフレームを使った滑らかなスクロール処理
-                    function step(now) {
-                        const elapsed = now - startTime;
-                        const progress = Math.min(elapsed / durationMs, 1); // 0から1の進捗率
+                recorder.start();
 
-                        // 現在のスクロール位置を計算（線形補間）
-                        const currentPx = startPx + (endPx - startPx) * progress;
-                        window.scrollTo(0, currentPx);
+                const startTime = performance.now();
+                const durationMs = durationSec * 1000;
 
-                        if (progress < 1) {
-                            requestAnimationFrame(step);
-                        } else {
-                            // 指定時間に達したら停止
-                            recorder.stop();
-                            stream.getTracks().forEach(track => track.stop()); // キャプチャ終了
-                        }
+                function step(now) {
+                    const elapsed = now - startTime;
+                    const progress = Math.min(elapsed / durationMs, 1);
+                    const currentPx = endPx * progress;
+
+                    // iframeの中をスクロールさせる
+                    if (targetWindow) {
+                        targetWindow.scrollTo(0, currentPx);
                     }
 
-                    // スクロールアニメーション開始
-                    requestAnimationFrame(step);
-
-                } catch (err) {
-                    console.error("エラーが発生しました:", err);
-                    alert("キャプチャの開始に失敗しました。画面共有を許可してください。");
-                    panel.style.opacity = '1';
-                    panel.style.pointerEvents = 'auto';
-                    statusMsg.innerText = 'エラーにより中断';
+                    if (progress < 1) {
+                        requestAnimationFrame(step);
+                    } else {
+                        recorder.stop();
+                        stream.getTracks().forEach(track => track.stop());
+                    }
                 }
-            });
+
+                requestAnimationFrame(step);
+
+            } catch (err) {
+                console.error(err);
+                alert("キャプチャに失敗しました。");
+                document.getElementById('control-panel').style.display = 'flex';
+                status.innerText = 'エラー発生';
+            }
+        });
+
+        // ウィンドウサイズが変更されたらプレビューの縮小率を再計算
+        window.onresize = () => {
+            if(iframe.src !== 'about:blank'){
+                const targetWidth = parseInt(widthInput.value) || 3840;
+                const scale = viewArea.clientWidth / targetWidth;
+                scaler.style.transform = `scale(${scale})`;
+            }
         };
     </script>
 </body>
