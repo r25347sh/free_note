@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Host Casino - Live BGM Generator</title>
+    <!-- Tone.js の読み込み -->
+    <script src="https://cloudflare.com"></script>
+    <style>
+        body {
+            background-color: #0b0c10;
+            color: #c5a880; /* シャンパンゴールド */
+            font-family: 'Georgia', serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            text-align: center;
+        }
+        h1 {
+            font-size: 2.5rem;
+            letter-spacing: 4px;
+            margin-bottom: 10px;
+            text-shadow: 0 0 10px rgba(197, 168, 128, 0.5);
+        }
+        p { color: #8f8f8f; margin-bottom: 30px; }
+        .btn {
+            background: linear-gradient(135deg, #c5a880 0%, #a38558 100%);
+            border: none;
+            color: #0b0c10;
+            padding: 15px 40px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            border-radius: 50px;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(197, 168, 128, 0.3);
+            transition: all 0.3s ease;
+            margin: 10px;
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(197, 168, 128, 0.5);
+        }
+        .btn-stop { background: #333; color: #ccc; }
+    </style>
+</head>
+<body>
+
+    <h1>CLUB CASINO</h1>
+    <p>Real-time Luxury Ambient Generator</p>
+    
+    <div>
+        <button class="btn" id="start-btn">ENTER / PLAY</button>
+        <button class="btn btn-stop" id="stop-btn">STOP</button>
+    </div>
+
+    <script>
+        // --- 1. エフェクト（リバーブとディレイで夜の高級感を演出） ---
+        const reverb = new Tone.Reverb({ roomSize: 0.7, wet: 0.4 }).toDestination();
+        const delay = new Tone.FeedbackDelay("8n.", 0.3).connect(reverb);
+
+        // --- 2. 楽器の設定 ---
+        // メロディ用（エレピ風の丸いシンセ音）
+        const piano = new Tone.PolySynth(Tone.Synth, {
+            oscillator: { type: "sine" },
+            envelope: { attack: 0.05, decay: 0.1, sustain: 0.8, release: 1 }
+        }).connect(delay);
+        piano.volume.value = -6;
+
+        // ベース用（低重心のウッドベース風）
+        const bass = new Tone.MonoSynth({
+            oscillator: { type: "triangle" },
+            envelope: { attack: 0.05, decay: 0.2, sustain: 0.9, release: 0.3 }
+        }).connect(reverb);
+        bass.volume.value = -3;
+
+        // --- 3. 音楽のルール（ホストカジノ風コードとスケール） ---
+        // 夜の都会を演出するジャズ風コード進行
+        const progression = [
+            { chords: [["A3", "C4", "E4", "G4"], ["A2"]], name: "Am7" }, // 妖艶な夜の始まり
+            { chords: [["D3", "F#4", "A4", "C5"], ["D2"]], name: "D7" },  // 華やかな展開
+            { chords: [["B3", "D4", "F#4", "A4"], ["B2"]], name: "Bm7" }, // 少し危険な緊張感
+            { chords: [["E3", "G#4", "B4", "D5"], ["E2"]], name: "E7" }   // 誘惑するラスト
+        ];
+
+        // メロディ用に使える「お洒落で怪しい」音階 (Aマイナーペンタ + テンション音)
+        const melodyNotes = ["A4", "B4", "C5", "E5", "F#5", "G5", "A5", "C6"];
+
+        let step = 0;
+
+        // --- 4. リアルタイム生成ループ ---
+        // 4分音符（1拍）ごとにこの関数が自動実行されます
+        const loop = new Tone.Sequence((time, index) => {
+            // 4拍（1小節）ごとにコード進行を進める
+            const chordIndex = Math.floor(index / 4) % progression.length;
+            const currentProg = progression[chordIndex];
+
+            // 1拍目の頭だけでコード（和音）とベースを鳴らす
+            if (index % 4 === 0) {
+                // コードの伴奏
+                piano.triggerAttackRelease(currentProg.chords[0], "2n", time, 0.4);
+                // ベースライン
+                bass.triggerAttackRelease(currentProg.chords[1], "2n", time, 0.8);
+            } 
+            // 3拍目でベースを動かしてジャズ感を出す
+            else if (index % 4 === 2) {
+                bass.triggerAttackRelease(currentProg.chords[0][0], "4n", time, 0.6); // コードのルート音を低く
+            }
+
+            // --- メロディのランダムリアルタイム生成 ---
+            // 60%の確率で、きらびやかな高音フレーズをランダムに鳴らす
+            if (Math.random() > 0.4) {
+                const randomNote = melodyNotes[Math.floor(Math.random() * melodyNotes.length)];
+                // 拍の裏（少しずらしたタイミング）で鳴らしてスウィング感を出す
+                const ror = Math.random() > 0.5 ? "8n" : "16n";
+                piano.triggerAttackRelease(randomNote, ror, time + Tone.Time("8n").toSeconds() * Math.random(), 0.3);
+            }
+
+        }, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15], "4n"); // 16拍（4小節）で1サイクル
+
+        // BPM（テンポ）を110に設定（大人のラウンジ感）
+        Tone.Transport.bpm.value = 110;
+
+        // --- 5. ボタンの制御 ---
+        document.getElementById("start-btn").addEventListener("click", async () => {
+            await Tone.start();
+            Tone.Transport.start();
+            loop.start(0);
+        });
+
+        document.getElementById("stop-btn").addEventListener("click", () => {
+            Tone.Transport.stop();
+            loop.stop();
+        });
+    </script>
+</body>
+</html>
