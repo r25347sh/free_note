@@ -47,52 +47,24 @@
         });
 
         // 2. ボタンが押されたら、YouTubeの音を横取りしてChromebookに発信する
-        connectBtn.addEventListener('click', async () => {
-            statusDiv.innerText = "音声ルートを設定中...";
-
-            try {
-                // Web Audio APIのコンテキストを作成
-                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                
-                // YouTubeのiframeから音声エレメントをソースとして取得
-                // ⚠️注意: YouTubeの仕様変更やセキュリティ制限（CORS）により、
-                // iframeからの直接キャプチャがブロックされる場合があります。
-                // その場合は、一番下の【動かない場合の対策】を確認してください。
-                const source = audioCtx.createMediaElementSource(iframe);
-                
-                // 音声ストリーム（WebRTCで送るための出口）を作成
-                const dest = audioCtx.createMediaStreamDestination();
-                
-                // YouTubeの音を、送信用の出口に繋ぐ
-                source.connect(dest);
-                // スマホ本体からも音が鳴るようにスピーカーにも繋ぐ
-                source.connect(audioCtx.destination); 
-
-                // 出口から「音声ストリーム」を取り出す
-                const audioStream = dest.stream;
-
-                statusDiv.innerText = "Chromebookに接続を試みています...";
-
-                // 前回作った受信側ChromebookのID（chromebook-receiver-xyz）に向けて発信！
-                const call = peer.call('chromebook-receiver-xyz', audioStream);
-
-                call.on('stream', () => {
-                    statusDiv.innerText = "接続成功！Chromebookで音が鳴っています 🔊";
-                    connectBtn.style.background = "#007bff";
-                    connectBtn.innerText = "配信中";
-                });
-
-                // 通信が切れたとき
-                call.on('close', () => {
-                    statusDiv.innerText = "接続が切れました。";
-                    connectBtn.disabled = false;
-                });
-
-            } catch (err) {
-                console.error(err);
-                statusDiv.innerText = "エラーが発生しました: " + err.message;
-            }
+// 【マイクから音を拾って送る場合の書き換えコード】
+connectBtn.addEventListener('click', async () => {
+    statusDiv.innerText = "マイクの使用を許可してください...";
+    try {
+        // スマホのマイク（およびスピーカーから出た音）をキャプチャ
+        const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        
+        statusDiv.innerText = "Chromebookに接続中...";
+        const call = peer.call('chromebook-receiver-xyz', audioStream);
+        
+        call.on('stream', () => {
+            statusDiv.innerText = "マイク経由で配信中 🔊 (スマホの音量を上げてください)";
         });
+    } catch (err) {
+        statusDiv.innerText = "マイクエラー: " + err.message;
+    }
+});
+);
     </script>
 </body>
 </html>
