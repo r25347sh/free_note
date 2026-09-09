@@ -44,6 +44,7 @@
             box-shadow: 0 6px 20px rgba(197, 168, 128, 0.5);
         }
         .btn-stop { background: #333; color: #ccc; }
+        #status { margin-top: 20px; font-size: 0.9rem; color: #ff5555; }
     </style>
 </head>
 <body>
@@ -55,84 +56,87 @@
         <button class="btn" id="start-btn">ENTER / PLAY</button>
         <button class="btn btn-stop" id="stop-btn">STOP</button>
     </div>
+    <div id="status"></div>
 
     <script>
-        // --- 1. エフェクト（リバーブとディレイで夜の高級感を演出） ---
-        const reverb = new Tone.Reverb({ roomSize: 0.7, wet: 0.4 }).toDestination();
-        const delay = new Tone.FeedbackDelay("8n.", 0.3).connect(reverb);
+        // エラーハンドリング用
+        const statusDiv = document.getElementById("status");
+
+        // --- 1. エフェクト ---
+        const reverb = new Tone.Reverb({ roomSize: 0.6, wet: 0.3 }).toDestination();
 
         // --- 2. 楽器の設定 ---
-        // メロディ用（エレピ風の丸いシンセ音）
         const piano = new Tone.PolySynth(Tone.Synth, {
             oscillator: { type: "sine" },
-            envelope: { attack: 0.05, decay: 0.1, sustain: 0.8, release: 1 }
-        }).connect(delay);
+            envelope: { attack: 0.03, decay: 0.1, sustain: 0.7, release: 0.8 }
+        }).connect(reverb);
         piano.volume.value = -6;
 
-        // ベース用（低重心のウッドベース風）
         const bass = new Tone.MonoSynth({
             oscillator: { type: "triangle" },
-            envelope: { attack: 0.05, decay: 0.2, sustain: 0.9, release: 0.3 }
+            envelope: { attack: 0.05, decay: 0.2, sustain: 0.8, release: 0.4 }
         }).connect(reverb);
         bass.volume.value = -3;
 
-        // --- 3. 音楽のルール（ホストカジノ風コードとスケール） ---
-        // 夜の都会を演出するジャズ風コード進行
+        // --- 3. 音楽のルール（ホストカジノ風コード） ---
         const progression = [
-            { chords: [["A3", "C4", "E4", "G4"], ["A2"]], name: "Am7" }, // 妖艶な夜の始まり
-            { chords: [["D3", "F#4", "A4", "C5"], ["D2"]], name: "D7" },  // 華やかな展開
-            { chords: [["B3", "D4", "F#4", "A4"], ["B2"]], name: "Bm7" }, // 少し危険な緊張感
-            { chords: [["E3", "G#4", "B4", "D5"], ["E2"]], name: "E7" }   // 誘惑するラスト
+            { chords: ["A3", "C4", "E4", "G4"], bass: "A2" },  // Am7
+            { chords: ["D3", "F#4", "A4", "C5"], bass: "D2" }, // D7
+            { chords: ["B3", "D4", "F#4", "A4"], bass: "B2" }, // Bm7
+            { chords: ["E3", "G#4", "B4", "D5"], bass: "E2" }  // E7
         ];
-
-        // メロディ用に使える「お洒落で怪しい」音階 (Aマイナーペンタ + テンション音)
         const melodyNotes = ["A4", "B4", "C5", "E5", "F#5", "G5", "A5", "C6"];
 
-        let step = 0;
+        let totalBeats = 0;
 
-        // --- 4. リアルタイム生成ループ ---
-        // 4分音符（1拍）ごとにこの関数が自動実行されます
-        const loop = new Tone.Sequence((time, index) => {
-            // 4拍（1小節）ごとにコード進行を進める
-            const chordIndex = Math.floor(index / 4) % progression.length;
+        // --- 4. 確実な再生ループ（4分音符ごと） ---
+        Tone.Transport.scheduleRepeat((time) => {
+            const currentMeasure = Math.floor(totalBeats / 4);
+            const chordIndex = currentMeasure % progression.length;
             const currentProg = progression[chordIndex];
+            const beatInMeasure = totalBeats % 4;
 
-            // 1拍目の頭だけでコード（和音）とベースを鳴らす
-            if (index % 4 === 0) {
-                // コードの伴奏
-                piano.triggerAttackRelease(currentProg.chords[0], "2n", time, 0.4);
-                // ベースライン
-                bass.triggerAttackRelease(currentProg.chords[1], "2n", time, 0.8);
+            // 1拍目の頭で和音とベースを鳴らす
+            if (beatInMeasure === 0) {
+                piano.triggerAttackRelease(currentProg.chords, "2n", time, 0.3);
+                bass.triggerAttackRelease(currentProg.bass, "2n", time, 0.6);
             } 
-            // 3拍目でベースを動かしてジャズ感を出す
-            else if (index % 4 === 2) {
-                bass.triggerAttackRelease(currentProg.chords[0][0], "4n", time, 0.6); // コードのルート音を低く
+            // 3拍目でベースを動かす
+            else if (beatInMeasure === 2) {
+                bass.triggerAttackRelease(currentProg.bass, "4n", time, 0.4);
             }
 
-            // --- メロディのランダムリアルタイム生成 ---
-            // 60%の確率で、きらびやかな高音フレーズをランダムに鳴らす
+            // メロディをランダム生成
             if (Math.random() > 0.4) {
                 const randomNote = melodyNotes[Math.floor(Math.random() * melodyNotes.length)];
-                // 拍の裏（少しずらしたタイミング）で鳴らしてスウィング感を出す
-                const ror = Math.random() > 0.5 ? "8n" : "16n";
-                piano.triggerAttackRelease(randomNote, ror, time + Tone.Time("8n").toSeconds() * Math.random(), 0.3);
+                // 拍の裏（少し遅らせたタイミング）で鳴らす
+                const delayTime = Math.random() > 0.5 ? Tone.Time("8n").toSeconds() : 0;
+                piano.triggerAttackRelease(randomNote, "8n", time + delayTime, 0.2);
             }
 
-        }, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15], "4n"); // 16拍（4小節）で1サイクル
+            totalBeats++;
+        }, "4n");
 
-        // BPM（テンポ）を110に設定（大人のラウンジ感）
         Tone.Transport.bpm.value = 110;
 
         // --- 5. ボタンの制御 ---
         document.getElementById("start-btn").addEventListener("click", async () => {
-            await Tone.start();
-            Tone.Transport.start();
-            loop.start(0);
+            try {
+                statusDiv.innerText = "起動中...";
+                // オーディオコンテキストの明示的な開始
+                await Tone.start();
+                Tone.Transport.start();
+                statusDiv.innerText = "再生中...（音が小さい場合は音量を上げてください）";
+                statusDiv.style.color = "#c5a880";
+            } catch (error) {
+                statusDiv.innerText = "エラーが発生しました: " + error.message;
+            }
         });
 
         document.getElementById("stop-btn").addEventListener("click", () => {
             Tone.Transport.stop();
-            loop.stop();
+            statusDiv.innerText = "停止中";
+            statusDiv.style.color = "#8f8f8f";
         });
     </script>
 </body>
