@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Audio Playlist Player</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <h1 class="logo">Audio Playlist</h1>
+      <p class="subtitle">ローカル音声ファイルをアップロードしてプレイリスト再生</p>
+    </header>
+
+    <main class="main">
+      <!-- Upload Zone -->
+      <section class="upload-section">
+        <div id="dropZone" class="drop-zone">
+          <div class="drop-zone-content">
+            <svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M12 16V4m0 0l-4 4m4-4l4 4"/>
+              <path d="M20 16.5V18a2 2 0 01-2 2H6a2 2 0 01-2-2v-1.5"/>
+            </svg>
+            <p class="drop-text">音声ファイルをドラッグ＆ドロップ</p>
+            <p class="drop-hint">またはクリックして選択（複数可）</p>
+            <input type="file" id="fileInput" accept="audio/*" multiple hidden>
+          </div>
+        </div>
+      </section>
+
+      <!-- Player -->
+      <section class="player-section">
+        <div class="now-playing">
+          <div class="track-info">
+            <span class="track-label">NOW PLAYING</span>
+            <h2 id="currentTitle" class="track-title">—</h2>
+            <p id="currentMeta" class="track-meta">ファイルを追加してください</p>
+          </div>
+        </div>
+
+        <div class="progress-container">
+          <span id="currentTime" class="time">0:00</span>
+          <div class="progress-bar" id="progressBar">
+            <div class="progress-fill" id="progressFill"></div>
+            <div class="progress-handle" id="progressHandle"></div>
+          </div>
+          <span id="duration" class="time">0:00</span>
+        </div>
+
+        <div class="controls">
+          <button id="btnShuffle" class="ctrl-btn" title="シャッフル" aria-label="シャッフル">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/>
+            </svg>
+          </button>
+          <button id="btnPrev" class="ctrl-btn" title="前の曲" aria-label="前の曲">
+            <svg viewBox="0 0 24 24" fill="currentColor">
+              <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/>
+            </svg>
+          </button>
+          <button id="btnPlay" class="ctrl-btn play-btn" title="再生/一時停止" aria-label="再生">
+            <svg id="iconPlay" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M8 5v14l11-7z"/>
+            </svg>
+            <svg id="iconPause" viewBox="0 0 24 24" fill="currentColor" class="hidden">
+              <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
+            </svg>
+          </button>
+          <button id="btnNext" class="ctrl-btn" title="次の曲" aria-label="次の曲">
+            <svg viewBox="0 0 24 24" fill="currentColor">
+              <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/>
+            </svg>
+          </button>
+          <button id="btnLoop" class="ctrl-btn" title="ループ" aria-label="ループ" data-mode="off">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M17 1l4 4-4 4"/>
+              <path d="M3 11V9a4 4 0 014-4h14"/>
+              <path d="M7 23l-4-4 4-4"/>
+              <path d="M21 13v2a4 4 0 01-4 4H3"/>
+            </svg>
+            <span id="loopBadge" class="loop-badge hidden">1</span>
+          </button>
+        </div>
+
+        <div class="volume-container">
+          <svg class="volume-icon" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/>
+          </svg>
+          <input type="range" id="volumeSlider" class="volume-slider" min="0" max="1" step="0.01" value="0.8">
+        </div>
+      </section>
+
+      <!-- Playlist -->
+      <section class="playlist-section">
+        <div class="playlist-header">
+          <h3>プレイリスト <span id="trackCount" class="count">0</span></h3>
+          <div class="playlist-actions">
+            <button id="btnClear" class="text-btn" title="すべてクリア">クリア</button>
+          </div>
+        </div>
+        <ul id="playlist" class="playlist">
+          <!-- items injected by JS -->
+        </ul>
+        <p id="emptyState" class="empty-state">まだ曲がありません。上から音声ファイルを追加してください。</p>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <p>すべての処理はブラウザ内で完結します。サーバーにファイルは送信されません。</p>
+    </footer>
+  </div>
+
+  <audio id="audio" preload="metadata"></audio>
+  <script src="script.js"></script>
+</body>
+</html>
