@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Audio Receiver</title>
+    <!-- WebRTCを簡単につなぐライブラリ -->
+    <script src="https://unpkg.com"></script>
+</head>
+<body>
+    <h1>スマホからの音を受信中...</h1>
+    <audio id="remote-audio" autoplay></audio>
+
+    <script>
+        // 自分専用のIDを作成してシグナリングサーバーに接続
+        const peer = new Peer('chromebook-receiver-xyz'); 
+
+        // スマホから着信（音声ストリーム）があったときの処理
+        peer.on('call', (call) => {
+            // 応答する（こちらからは何も送らない）
+            call.answer();
+            
+            // 相手（スマホ）の音を受け取ったら、audioタグにセットして鳴らす
+            call.on('stream', (remoteStream) => {
+                document.getElementById('remote-audio').srcObject = remoteStream;
+            });
+        });
+    </script>
+</body>
+</html>
