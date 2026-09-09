@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LIFF Audio Sender</title>
+    <!-- WebRTCを簡単にするライブラリ -->
+    <script src="https://unpkg.com"></script>
+    <style>
+        body { font-family: sans-serif; text-align: center; padding: 20px; background: #f0f0f0; }
+        button { padding: 12px 24px; font-size: 16px; margin: 10px; border: none; background: #06C755; color: white; border-radius: 5px; cursor: pointer; }
+        button:disabled { background: #ccc; }
+        #status { font-weight: bold; color: #555; margin: 15px; }
+        .video-container { margin-top: 20px; }
+    </style>
+</head>
+<body>
+
+    <h1>LIFF 音声送信機</h1>
+    <div id="status">Chromebookへの接続を準備中...</div>
+    
+    <!-- ⚠️接続ボタン（スマホのブラウザ仕様上、ユーザーが画面をタップしないと音が送れません） -->
+    <button id="connect-btn" disabled>Chromebookへ音声を送る</button>
+
+    <!-- LIFF内に埋め込むYouTubeプレイヤー（例として特定の動画IDをセットしています） -->
+    <div class="video-container">
+        <iframe id="youtube-player" width="320" height="180" 
+            src="https://youtube.com" 
+            title="YouTube video player" frameborder="0" 
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+            allowfullscreen>
+        </iframe>
+    </div>
+
+    <script>
+        const statusDiv = document.getElementById('status');
+        const connectBtn = document.getElementById('connect-btn');
+        const iframe = document.getElementById('youtube-player');
+
+        // 1. PeerJSの初期化（シグナリングサーバーへの接続）
+        // ランダムなIDで接続を開始します
+        const peer = new Peer(); 
+
+        peer.on('open', (id) => {
+            statusDiv.innerText = "準備完了！「音声を送る」を押してください";
+            connectBtn.disabled = false;
+        });
+
+        // 2. ボタンが押されたら、YouTubeの音を横取りしてChromebookに発信する
+        connectBtn.addEventListener('click', async () => {
+            statusDiv.innerText = "音声ルートを設定中...";
+
+            try {
+                // Web Audio APIのコンテキストを作成
+                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                
+                // YouTubeのiframeから音声エレメントをソースとして取得
+                // ⚠️注意: YouTubeの仕様変更やセキュリティ制限（CORS）により、
+                // iframeからの直接キャプチャがブロックされる場合があります。
+                // その場合は、一番下の【動かない場合の対策】を確認してください。
+                const source = audioCtx.createMediaElementSource(iframe);
+                
+                // 音声ストリーム（WebRTCで送るための出口）を作成
+                const dest = audioCtx.createMediaStreamDestination();
+                
+                // YouTubeの音を、送信用の出口に繋ぐ
+                source.connect(dest);
+                // スマホ本体からも音が鳴るようにスピーカーにも繋ぐ
+                source.connect(audioCtx.destination); 
+
+                // 出口から「音声ストリーム」を取り出す
+                const audioStream = dest.stream;
+
+                statusDiv.innerText = "Chromebookに接続を試みています...";
+
+                // 前回作った受信側ChromebookのID（chromebook-receiver-xyz）に向けて発信！
+                const call = peer.call('chromebook-receiver-xyz', audioStream);
+
+                call.on('stream', () => {
+                    statusDiv.innerText = "接続成功！Chromebookで音が鳴っています 🔊";
+                    connectBtn.style.background = "#007bff";
+                    connectBtn.innerText = "配信中";
+                });
+
+                // 通信が切れたとき
+                call.on('close', () => {
+                    statusDiv.innerText = "接続が切れました。";
+                    connectBtn.disabled = false;
+                });
+
+            } catch (err) {
+                console.error(err);
+                statusDiv.innerText = "エラーが発生しました: " + err.message;
+            }
+        });
+    </script>
+</body>
+</html>
