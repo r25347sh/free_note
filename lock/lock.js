@@ -6,12 +6,12 @@
  *   <script src="/free_note/lock/lock.js"></script>
  *   <script>
  *     LockSystem.init({
- *       audioSrc: './alert.mp3',          // 必須に近い（アラート音源）
+ *       audioSrc: './alert.mp3',          // アラート音源
  *       lockButtonId: 'myLockBtn',        // 省略可（自動でボタンを作る）
- *       unlockSequence: 'asobiseminar',   // 省略可
- *       offSequence: 'off',               // 省略可
+ *       unlockSequence: 'asobiseminar',   // 省略可（画面には一切表示されない）
+ *       offSequence: 'off',               // 省略可（画面には一切表示されない）
  *       enterCountRequired: 3,            // 省略可
- *       onLock: () => {},                 // コールバック
+ *       onLock: () => {},
  *       onUnlock: () => {},
  *       onAlertStart: () => {},
  *       onAlertStop: () => {}
@@ -21,6 +21,9 @@
  * または既存のボタンを使う場合:
  *   <button id="lockBtn">🔒</button>
  *   LockSystem.init({ audioSrc: '...' });
+ *
+ * ロック画面には 🔒 と LOCKED だけが表示されます。
+ * 解除シーケンス（asobiseminar / off）は一切画面に出ません。
  */
 
 (function (global) {
@@ -54,7 +57,7 @@
   let isAlerting = false;
   let audio = null;
 
-  // シーケンス用バッファ
+  // シーケンス用バッファ（内部のみ・画面には出さない）
   let unlockBuffer = '';
   let unlockEnterCount = 0;
   let unlockPhase = 'typing'; // 'typing' | 'enters'
@@ -79,7 +82,6 @@
       audio = new Audio(options.audioSrc);
       audio.loop = true;
       audio.preload = 'auto';
-      // エラー時のフォールバック表示
       audio.addEventListener('error', () => {
         console.warn('[LockSystem] 音声ファイルを読み込めませんでした:', options.audioSrc);
         console.warn('lock/ フォルダに alert.mp3 を置くか、audioSrc オプションを指定してください。');
@@ -146,6 +148,7 @@
 
   /**
    * フルスクリーンオーバーレイを作成
+   * 表示内容は 🔒 と LOCKED のみ。シーケンスやヒントは一切出さない。
    */
   function ensureOverlay() {
     let overlay = document.getElementById(options.overlayId);
@@ -158,7 +161,7 @@
       position: fixed;
       inset: 0;
       z-index: 9999;
-      background: rgba(0, 0, 0, 0.88);
+      background: rgba(0, 0, 0, 0.92);
       color: #fff;
       font-family: system-ui, -apple-system, sans-serif;
       flex-direction: column;
@@ -169,15 +172,10 @@
       -webkit-user-select: none;
     `;
 
+    // 見た目はこれだけ。ヒント・進捗・シーケンス名は一切含めない
     overlay.innerHTML = `
-      <div style="font-size: 64px; margin-bottom: 16px;">🔒</div>
-      <div style="font-size: 28px; font-weight: 600; letter-spacing: 0.05em;">LOCKED</div>
-      <div id="lock-status" style="margin-top: 24px; font-size: 14px; opacity: 0.7; max-width: 320px; line-height: 1.5;">
-        解除するには正しいシーケンスを入力してください
-      </div>
-      <div id="lock-alert-indicator" style="display:none; margin-top: 32px; color: #ff6b6b; font-size: 15px;">
-        ⚠ アラート再生中 — 「off」+ Enter×3 で停止
-      </div>
+      <div style="font-size: 72px; margin-bottom: 12px; line-height: 1;">🔒</div>
+      <div style="font-size: 22px; font-weight: 600; letter-spacing: 0.12em; opacity: 0.9;">LOCKED</div>
     `;
 
     document.body.appendChild(overlay);
@@ -208,18 +206,14 @@
     // マウス操作監視（アラート用）
     mouseHandlers = [];
     options.mouseEvents.forEach((evtName) => {
-      const handler = (e) => {
-        // オーバーレイ上の操作も含めて感知
+      const handler = () => {
         if (isLocked && !isAlerting) {
           startAlert();
         }
       };
-      // capture で確実に拾う
       window.addEventListener(evtName, handler, true);
       mouseHandlers.push({ evtName, handler });
     });
-
-    updateStatus('解除シーケンスを入力してください');
 
     if (typeof options.onLock === 'function') {
       options.onLock();
@@ -266,6 +260,7 @@
 
   /**
    * アラート開始（ループ再生）
+   * 画面上には何も追加表示しない（音だけで通知）
    */
   function startAlert() {
     if (isAlerting || !isLocked) return;
@@ -277,17 +272,12 @@
       const playPromise = audio.play();
       if (playPromise && typeof playPromise.catch === 'function') {
         playPromise.catch((err) => {
-          console.warn('[LockSystem] 音声再生に失敗しました（ユーザー操作が必要な場合があります）:', err);
+          console.warn('[LockSystem] 音声再生に失敗しました:', err);
         });
       }
     } else {
       console.warn('[LockSystem] audioSrc が設定されていません');
     }
-
-    const indicator = document.getElementById('lock-alert-indicator');
-    if (indicator) indicator.style.display = 'block';
-
-    updateStatus('アラート中 — 「off」を入力して Enter を3回');
 
     if (typeof options.onAlertStart === 'function') {
       options.onAlertStart();
@@ -309,13 +299,6 @@
       audio.currentTime = 0;
     }
 
-    const indicator = document.getElementById('lock-alert-indicator');
-    if (indicator) indicator.style.display = 'none';
-
-    if (isLocked) {
-      updateStatus('解除シーケンスを入力してください');
-    }
-
     resetOffState();
 
     if (typeof options.onAlertStop === 'function') {
@@ -332,7 +315,6 @@
     if (!isLocked) return;
 
     // ブラウザのデフォルト動作をある程度抑制
-    // （特にスペースや矢印でのスクロールなど）
     if ([' ', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Tab'].includes(e.key)) {
       e.preventDefault();
     }
@@ -350,7 +332,7 @@
   }
 
   /**
-   * 解除シーケンス処理
+   * 解除シーケンス処理（画面には一切表示しない）
    * 「asobiseminar」→ Enter ×3
    */
   function processUnlockSequence(key, e) {
@@ -359,33 +341,24 @@
       const nextChar = expected[unlockBuffer.length];
 
       if (key.length === 1 && key.toLowerCase() === nextChar) {
-        // 正しい文字
         unlockBuffer += key.toLowerCase();
         e.preventDefault();
 
         if (unlockBuffer === expected) {
-          // 全文一致 → Enter待ちへ
           unlockPhase = 'enters';
           unlockEnterCount = 0;
-          updateStatus('Enter を 3 回押してください');
-        } else {
-          updateStatus(`入力中... (${unlockBuffer.length}/${expected.length})`);
         }
       } else if (key === 'Enter' || key === 'Backspace' || key === 'Escape') {
-        // 途中の特殊キーはリセット
         resetUnlockState();
-        updateStatus('解除シーケンスを入力してください');
       } else if (key.length === 1) {
         // 間違った文字 → リセット
         resetUnlockState();
-        updateStatus('解除シーケンスを入力してください');
       }
       // その他のキー（Shiftなど）は無視
     } else if (unlockPhase === 'enters') {
       if (key === 'Enter') {
         e.preventDefault();
         unlockEnterCount += 1;
-        updateStatus(`Enter ${unlockEnterCount} / ${options.enterCountRequired}`);
 
         if (unlockEnterCount >= options.enterCountRequired) {
           unlock();
@@ -393,13 +366,12 @@
       } else {
         // Enter以外が来たら最初から
         resetUnlockState();
-        updateStatus('解除シーケンスを入力してください');
       }
     }
   }
 
   /**
-   * アラート停止シーケンス処理
+   * アラート停止シーケンス処理（画面には一切表示しない）
    * 「off」→ Enter ×3
    */
   function processOffSequence(key, e) {
@@ -414,31 +386,23 @@
         if (offBuffer === expected) {
           offPhase = 'enters';
           offEnterCount = 0;
-          updateStatus('アラート停止: Enter を 3 回');
-        } else {
-          updateStatus(`off 入力中... (${offBuffer.length}/${expected.length})`);
         }
       } else if (key === 'Enter' || key === 'Backspace' || key === 'Escape') {
         resetOffState();
-        updateStatus('アラート中 — 「off」を入力して Enter を3回');
       } else if (key.length === 1) {
         resetOffState();
-        updateStatus('アラート中 — 「off」を入力して Enter を3回');
       }
     } else if (offPhase === 'enters') {
       if (key === 'Enter') {
         e.preventDefault();
         offEnterCount += 1;
-        updateStatus(`アラート停止 Enter ${offEnterCount} / ${options.enterCountRequired}`);
 
         if (offEnterCount >= options.enterCountRequired) {
           stopAlert();
           // アラートだけ止め、ロックは継続
-          updateStatus('解除シーケンスを入力してください');
         }
       } else {
         resetOffState();
-        updateStatus('アラート中 — 「off」を入力して Enter を3回');
       }
     }
   }
@@ -455,11 +419,6 @@
     offPhase = 'typing';
   }
 
-  function updateStatus(text) {
-    const el = document.getElementById('lock-status');
-    if (el) el.textContent = text;
-  }
-
   // 公開API
   const LockSystem = {
     init,
@@ -469,7 +428,7 @@
     stopAlert,
     isLocked: () => isLocked,
     isAlerting: () => isAlerting,
-    // デバッグ用
+    // デバッグ用（コンソールから確認可能）
     getState: () => ({
       isLocked,
       isAlerting,
