@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lock Demo - free_note</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      background: #0f0f12;
+      color: #e8e8ec;
+      min-height: 100vh;
+      line-height: 1.6;
+      padding: 40px 20px;
+    }
+
+    .container {
+      max-width: 640px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      font-size: 1.75rem;
+      font-weight: 700;
+      margin-bottom: 8px;
+      letter-spacing: -0.02em;
+    }
+
+    .subtitle {
+      color: #888;
+      margin-bottom: 32px;
+      font-size: 0.95rem;
+    }
+
+    .card {
+      background: #1a1a20;
+      border: 1px solid #2a2a32;
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 20px;
+    }
+
+    .card h2 {
+      font-size: 1.1rem;
+      margin-bottom: 12px;
+      color: #c0c0cc;
+    }
+
+    .card ol,
+    .card ul {
+      padding-left: 1.4em;
+      color: #b0b0bc;
+    }
+
+    .card li {
+      margin-bottom: 6px;
+    }
+
+    .card code {
+      background: #2a2a34;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.9em;
+      color: #9cdcfe;
+    }
+
+    .note {
+      font-size: 0.85rem;
+      color: #888;
+      margin-top: 16px;
+      padding-top: 12px;
+      border-top: 1px solid #2a2a32;
+    }
+
+    .note strong {
+      color: #ccc;
+    }
+
+    /* 右上のロックボタンは lock.js が自動生成 */
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🔒 Lock System Demo</h1>
+    <p class="subtitle">free_note / lock モジュールの動作確認ページ</p>
+
+    <div class="card">
+      <h2>使い方</h2>
+      <ol>
+        <li>右上の <strong>🔒 ボタン</strong> を押すとロックが開始されます。</li>
+        <li>ロック中にマウスを動かしたりクリックすると、<strong>アラート音がループ再生</strong>されます。</li>
+        <li>ロック解除: キーボードで <code>asobiseminar</code> を順番に入力 → <code>Enter</code> を <strong>3回</strong>連続で押す。</li>
+        <li>アラート停止: キーボードで <code>off</code> を順番に入力 → <code>Enter</code> を <strong>3回</strong>連続で押す。<br>
+            （アラートだけ止まり、ロック自体は継続します）</li>
+      </ol>
+    </div>
+
+    <div class="card">
+      <h2>音声ファイルについて</h2>
+      <p>現在は <code>./alert.mp3</code> を参照するようになっています。</p>
+      <p class="note">
+        <strong>alert.mp3</strong> をこの <code>lock/</code> フォルダに置いてください。<br>
+        別のパスを使いたい場合は、下のスクリプト内の <code>audioSrc</code> を変更してください。
+      </p>
+    </div>
+
+    <div class="card">
+      <h2>他のページで使う場合</h2>
+      <pre style="background:#121218;padding:14px;border-radius:8px;overflow-x:auto;font-size:0.85rem;color:#9cdcfe;"><code>&lt;script src="/free_note/lock/lock.js"&gt;&lt;/script&gt;
+&lt;script&gt;
+  LockSystem.init({
+    audioSrc: './path/to/your.mp3'
+  });
+&lt;/script&gt;</code></pre>
+    </div>
+  </div>
+
+  <!-- Lock モジュール -->
+  <script src="lock.js"></script>
+  <script>
+    // デモ用初期化
+    // 実際のアラート音源を置くか、パスを書き換えてください
+    LockSystem.init({
+      audioSrc: './alert.mp3',
+      // 必要ならコールバックも指定可能
+      onLock: () => console.log('ロック開始'),
+      onUnlock: () => console.log('ロック解除'),
+      onAlertStart: () => console.log('アラート開始'),
+      onAlertStop: () => console.log('アラート停止')
+    });
+  </script>
+</body>
+</html>
