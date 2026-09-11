@@ -94,10 +94,9 @@
       <h2>使い方</h2>
       <ol>
         <li>右上の <strong>🔒 ボタン</strong> を押すとロックが開始されます。</li>
+        <li>ロック中は画面に <strong>🔒 と LOCKED</strong> だけが表示されます。</li>
         <li>ロック中にマウスを動かしたりクリックすると、<strong>アラート音がループ再生</strong>されます。</li>
-        <li>ロック解除: キーボードで <code>asobiseminar</code> を順番に入力 → <code>Enter</code> を <strong>3回</strong>連続で押す。</li>
-        <li>アラート停止: キーボードで <code>off</code> を順番に入力 → <code>Enter</code> を <strong>3回</strong>連続で押す。<br>
-            （アラートだけ止まり、ロック自体は継続します）</li>
+        <li>解除・アラート停止は、決められたキー入力シーケンスで行います（画面上には一切表示されません）。</li>
       </ol>
     </div>
 
@@ -112,12 +111,12 @@
 
     <div class="card">
       <h2>他のページで使う場合</h2>
-      <pre style="background:#121218;padding:14px;border-radius:8px;overflow-x:auto;font-size:0.85rem;color:#9cdcfe;"><code>&lt;script src="/free_note/lock/lock.js"&gt;&lt;/script&gt;
-&lt;script&gt;
+      <pre style="background:#121218;padding:14px;border-radius:8px;overflow-x:auto;font-size:0.85rem;color:#9cdcfe;"><code><script src="/free_note/lock/lock.js"></script>
+<script>
   LockSystem.init({
     audioSrc: './path/to/your.mp3'
   });
-&lt;/script&gt;</code></pre>
+</script></code></pre>
     </div>
   </div>
 
@@ -128,7 +127,6 @@
     // 実際のアラート音源を置くか、パスを書き換えてください
     LockSystem.init({
       audioSrc: './alert.mp3',
-      // 必要ならコールバックも指定可能
       onLock: () => console.log('ロック開始'),
       onUnlock: () => console.log('ロック解除'),
       onAlertStart: () => console.log('アラート開始'),
