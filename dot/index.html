@@ -11,7 +11,7 @@
     <header>
       <div>
         <h1>ドット絵エディタ <span class="badge">DOT</span></h1>
-        <p>自由サイズのピクセルアート作成・SVG / PNG / JPEG 書き出し</p>
+        <p>自由サイズ・部位ID付きSVG・インポート・色数削減対応</p>
       </div>
     </header>
 
@@ -22,15 +22,38 @@
         <div class="row">
           <div>
             <label for="gridW">幅 (px)</label>
-            <input type="number" id="gridW" min="1" max="128" value="16">
+            <input type="number" id="gridW" min="1" max="1024" value="16">
           </div>
           <div>
             <label for="gridH">高さ (px)</label>
-            <input type="number" id="gridH" min="1" max="128" value="16">
+            <input type="number" id="gridH" min="1" max="1024" value="16">
           </div>
         </div>
         <button type="button" class="btn btn-secondary btn-block" id="btnApplySize" style="margin-top:10px;">サイズを適用</button>
-        <p class="hint">1〜128。既存の絵は左上基準で保持されます。</p>
+        <p class="hint">1〜1024。既存の絵は左上基準で保持されます。</p>
+      </div>
+
+      <!-- Import -->
+      <div class="card">
+        <h3>インポート</h3>
+        <label for="importFile">PNG / JPEG / SVG</label>
+        <input type="file" id="importFile" accept="image/png,image/jpeg,image/jpg,image/svg+xml,.svg,.png,.jpg,.jpeg">
+        <div class="row" style="margin-top:10px;">
+          <div>
+            <label for="importW">幅</label>
+            <input type="number" id="importW" min="1" max="1024" value="32">
+          </div>
+          <div>
+            <label for="importH">高さ</label>
+            <input type="number" id="importH" min="1" max="1024" value="32">
+          </div>
+        </div>
+        <label style="margin-top:8px; display:flex; align-items:center; gap:8px; cursor:pointer;">
+          <input type="checkbox" id="importLockRatio" checked>
+          アスペクト比を固定
+        </label>
+        <p class="hint" id="importHint">画像を選ぶと元サイズが表示されます</p>
+        <button type="button" class="btn btn-primary btn-block" id="btnImport" style="margin-top:10px;" disabled>インポート実行</button>
       </div>
 
       <!-- Tools -->
@@ -41,12 +64,32 @@
           <button type="button" class="tool-btn" data-tool="eraser" title="消しゴム (E)">🧹</button>
           <button type="button" class="tool-btn" data-tool="fill" title="塗りつぶし (G)">🪣</button>
           <button type="button" class="tool-btn" data-tool="eyedropper" title="スポイト (I)">💉</button>
+          <button type="button" class="tool-btn" data-tool="part" title="部位割り当て (A)">🏷️</button>
         </div>
         <div class="row" style="margin-top:10px;">
           <button type="button" class="btn btn-secondary" id="btnUndo" disabled>↩ 元に戻す</button>
           <button type="button" class="btn btn-secondary" id="btnRedo" disabled>↪ やり直し</button>
         </div>
         <button type="button" class="btn btn-danger btn-block" id="btnClear" style="margin-top:8px;">すべてクリア</button>
+      </div>
+
+      <!-- Parts (for SVG character IDs) -->
+      <div class="card">
+        <h3>部位（SVGグループID）</h3>
+        <p class="hint">キャラの「目」「体」など部位ごとに id を付けます。部位ツールで塗るか、描画時に割り当て。</p>
+        <div style="display:flex; gap:6px;">
+          <input type="text" id="partNameInput" placeholder="例: eye-left" maxlength="64" style="flex:1;">
+          <button type="button" class="btn btn-secondary" id="btnAddPart">追加</button>
+        </div>
+        <ul class="part-list" id="partList"></ul>
+        <label style="margin-top:8px;">現在の割り当て先</label>
+        <select id="activePart">
+          <option value="">（なし・未分類）</option>
+        </select>
+        <label style="margin-top:8px; display:flex; align-items:center; gap:8px; cursor:pointer;">
+          <input type="checkbox" id="showPartOverlay">
+          部位オーバーレイ表示
+        </label>
       </div>
 
       <!-- Color -->
@@ -62,13 +105,31 @@
           <label>最近使った色</label>
           <div class="recent-colors" id="recentColors"></div>
         </div>
+        <p class="hint" id="colorCountHint">使用色数: 0</p>
+      </div>
+
+      <!-- Color quantize -->
+      <div class="card">
+        <h3>色数の削減・近似</h3>
+        <label for="quantizeN">目標色数（透明除く）</label>
+        <input type="number" id="quantizeN" min="2" max="64" value="16">
+        <button type="button" class="btn btn-secondary btn-block" id="btnQuantize" style="margin-top:8px;">色数を減らす（自動パレット）</button>
+        <hr class="sep">
+        <label>指定色に近似揃え</label>
+        <p class="hint">パレット色だけを使い、全ピクセルを最も近い色に置き換えます。</p>
+        <button type="button" class="btn btn-secondary btn-block" id="btnMapToPalette">パレット色に揃える</button>
+        <div style="margin-top:8px;">
+          <label for="customPaletteText">または色を直接指定（カンマ区切り）</label>
+          <input type="text" id="customPaletteText" placeholder="#000,#fff,#f00,#0f0">
+          <button type="button" class="btn btn-secondary btn-block" id="btnMapToCustom" style="margin-top:6px;">指定色に揃える</button>
+        </div>
       </div>
 
       <!-- View -->
       <div class="card">
         <h3>表示</h3>
         <label for="pixelSize">表示倍率 (1マスの大きさ)</label>
-        <input type="number" id="pixelSize" min="2" max="64" value="20">
+        <input type="number" id="pixelSize" min="1" max="64" value="20">
         <label style="margin-top:10px; display:flex; align-items:center; gap:8px; cursor:pointer;">
           <input type="checkbox" id="showGrid" checked>
           グリッド線を表示
@@ -80,17 +141,21 @@
         <h3>エクスポート</h3>
         <label for="exportFormat">形式</label>
         <select id="exportFormat">
-          <option value="svg" selected>SVG（推奨・ベクター）</option>
+          <option value="svg" selected>SVG（推奨・部位ID対応）</option>
           <option value="png">PNG（透過対応）</option>
           <option value="jpeg">JPEG</option>
         </select>
 
         <div id="svgOptions" class="export-options visible" style="margin-top:12px;">
           <label for="svgRootId">SVG ルート id（任意）</label>
-          <input type="text" id="svgRootId" placeholder="例: my-dot-art">
-          <label for="svgIdPrefix" style="margin-top:8px;">各ピクセルの id 接頭辞（任意）</label>
-          <input type="text" id="svgIdPrefix" placeholder="例: p- → p-0-0">
-          <p class="hint">接頭辞を入れると各 &lt;rect&gt; に id="接頭辞X-Y" が付きます。</p>
+          <input type="text" id="svgRootId" placeholder="例: character">
+          <label style="margin-top:8px; display:flex; align-items:center; gap:8px; cursor:pointer;">
+            <input type="checkbox" id="svgGroupByPart" checked>
+            部位ごとに <g id="..."> でグループ化
+          </label>
+          <label for="svgIdPrefix" style="margin-top:8px;">各ピクセル id 接頭辞（任意・詳細用）</label>
+          <input type="text" id="svgIdPrefix" placeholder="例: px- → px-0-0">
+          <p class="hint">部位グループがあればキャラの目・体などを個別に操作できます。</p>
         </div>
 
         <label for="svgScale" style="margin-top:10px;">出力スケール（1マス = N 単位）</label>
@@ -106,7 +171,7 @@
         <input type="color" id="bgColor" value="#ffffff" style="margin-top:6px;">
 
         <button type="button" class="btn btn-success btn-block" id="btnExport" style="margin-top:14px;">↓ ダウンロード</button>
-        <p class="hint">ショートカット: Ctrl+S でも書き出せます。</p>
+        <p class="hint">ショートカット: Ctrl+S</p>
       </div>
     </aside>
 
@@ -126,7 +191,7 @@
     <footer>
       free_note / Dot Art Editor ·
       <a href="https://github.com/r25347sh/free_note" target="_blank" rel="noopener">GitHub</a>
-      · すべてブラウザ内で処理（サーバー送信なし）
+      · すべてブラウザ内で処理
     </footer>
   </div>
 
