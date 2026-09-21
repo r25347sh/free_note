@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ドット絵エディタ | free_note</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div>
+        <h1>ドット絵エディタ <span class="badge">DOT</span></h1>
+        <p>自由サイズのピクセルアート作成・SVG / PNG / JPEG 書き出し</p>
+      </div>
+    </header>
+
+    <aside class="sidebar">
+      <!-- Size -->
+      <div class="card">
+        <h3>キャンバスサイズ</h3>
+        <div class="row">
+          <div>
+            <label for="gridW">幅 (px)</label>
+            <input type="number" id="gridW" min="1" max="128" value="16">
+          </div>
+          <div>
+            <label for="gridH">高さ (px)</label>
+            <input type="number" id="gridH" min="1" max="128" value="16">
+          </div>
+        </div>
+        <button type="button" class="btn btn-secondary btn-block" id="btnApplySize" style="margin-top:10px;">サイズを適用</button>
+        <p class="hint">1〜128。既存の絵は左上基準で保持されます。</p>
+      </div>
+
+      <!-- Tools -->
+      <div class="card">
+        <h3>ツール</h3>
+        <div class="tool-grid">
+          <button type="button" class="tool-btn active" data-tool="pencil" title="鉛筆 (B)">✏️</button>
+          <button type="button" class="tool-btn" data-tool="eraser" title="消しゴム (E)">🧹</button>
+          <button type="button" class="tool-btn" data-tool="fill" title="塗りつぶし (G)">🪣</button>
+          <button type="button" class="tool-btn" data-tool="eyedropper" title="スポイト (I)">💉</button>
+        </div>
+        <div class="row" style="margin-top:10px;">
+          <button type="button" class="btn btn-secondary" id="btnUndo" disabled>↩ 元に戻す</button>
+          <button type="button" class="btn btn-secondary" id="btnRedo" disabled>↪ やり直し</button>
+        </div>
+        <button type="button" class="btn btn-danger btn-block" id="btnClear" style="margin-top:8px;">すべてクリア</button>
+      </div>
+
+      <!-- Color -->
+      <div class="card">
+        <h3>カラー</h3>
+        <label for="colorPicker">現在の色</label>
+        <input type="color" id="colorPicker" value="#000000">
+        <div style="margin-top:10px;">
+          <label>パレット</label>
+          <div class="palette" id="palette"></div>
+        </div>
+        <div style="margin-top:10px;">
+          <label>最近使った色</label>
+          <div class="recent-colors" id="recentColors"></div>
+        </div>
+      </div>
+
+      <!-- View -->
+      <div class="card">
+        <h3>表示</h3>
+        <label for="pixelSize">表示倍率 (1マスの大きさ)</label>
+        <input type="number" id="pixelSize" min="2" max="64" value="20">
+        <label style="margin-top:10px; display:flex; align-items:center; gap:8px; cursor:pointer;">
+          <input type="checkbox" id="showGrid" checked>
+          グリッド線を表示
+        </label>
+      </div>
+
+      <!-- Export -->
+      <div class="card">
+        <h3>エクスポート</h3>
+        <label for="exportFormat">形式</label>
+        <select id="exportFormat">
+          <option value="svg" selected>SVG（推奨・ベクター）</option>
+          <option value="png">PNG（透過対応）</option>
+          <option value="jpeg">JPEG</option>
+        </select>
+
+        <div id="svgOptions" class="export-options visible" style="margin-top:12px;">
+          <label for="svgRootId">SVG ルート id（任意）</label>
+          <input type="text" id="svgRootId" placeholder="例: my-dot-art">
+          <label for="svgIdPrefix" style="margin-top:8px;">各ピクセルの id 接頭辞（任意）</label>
+          <input type="text" id="svgIdPrefix" placeholder="例: p- → p-0-0">
+          <p class="hint">接頭辞を入れると各 &lt;rect&gt; に id="接頭辞X-Y" が付きます。</p>
+        </div>
+
+        <label for="svgScale" style="margin-top:10px;">出力スケール（1マス = N 単位）</label>
+        <input type="number" id="svgScale" min="1" max="64" value="10">
+
+        <label for="filename" style="margin-top:10px;">ファイル名（拡張子不要）</label>
+        <input type="text" id="filename" value="dotart" placeholder="dotart">
+
+        <label style="margin-top:10px; display:flex; align-items:center; gap:8px; cursor:pointer;">
+          <input type="checkbox" id="useBg">
+          背景色を付ける
+        </label>
+        <input type="color" id="bgColor" value="#ffffff" style="margin-top:6px;">
+
+        <button type="button" class="btn btn-success btn-block" id="btnExport" style="margin-top:14px;">↓ ダウンロード</button>
+        <p class="hint">ショートカット: Ctrl+S でも書き出せます。</p>
+      </div>
+    </aside>
+
+    <main class="main">
+      <div class="canvas-wrap">
+        <div class="canvas-container" id="canvasContainer">
+          <canvas id="pixelCanvas" width="320" height="320"></canvas>
+          <canvas id="gridOverlay" width="320" height="320"></canvas>
+        </div>
+      </div>
+      <div class="status-bar">
+        <span id="statusText">準備完了</span>
+        <span class="coord" id="coordText">—</span>
+      </div>
+    </main>
+
+    <footer>
+      free_note / Dot Art Editor ·
+      <a href="https://github.com/r25347sh/free_note" target="_blank" rel="noopener">GitHub</a>
+      · すべてブラウザ内で処理（サーバー送信なし）
+    </footer>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
