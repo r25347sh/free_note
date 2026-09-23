@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>QuizAI — Screen Share Answer Engine</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <div class="logo">
+        <span class="logo-mark">Q</span>
+        <span class="logo-text">QuizAI</span>
+      </div>
+      <div class="header-status" id="statusBadge">
+        <span class="status-dot"></span>
+        <span id="statusText">Ready</span>
+      </div>
+    </header>
+
+    <main class="main">
+      <section class="panel control-panel">
+        <h2 class="panel-title">Control</h2>
+
+        <div class="control-group">
+          <label class="label">Model</label>
+          <select id="modelSelect" class="select">
+            <option value="Phi-3.5-vision-instruct-q4f16_1-MLC" selected>
+              Phi-3.5 Vision (q4f16) — Recommended
+            </option>
+            <option value="Phi-3.5-vision-instruct-q4f32_1-MLC">
+              Phi-3.5 Vision (q4f32) — Higher precision
+            </option>
+          </select>
+        </div>
+
+        <div class="btn-row">
+          <button id="btnLoadModel" class="btn btn-primary" type="button">
+            Load Model
+          </button>
+          <button id="btnStartShare" class="btn btn-secondary" type="button" disabled>
+            Start Screen Share
+          </button>
+        </div>
+
+        <div class="progress-wrap" id="progressWrap" hidden>
+          <div class="progress-bar">
+            <div class="progress-fill" id="progressFill"></div>
+          </div>
+          <p class="progress-text" id="progressText">Initializing…</p>
+        </div>
+
+        <div class="btn-row mt">
+          <button id="btnSolve" class="btn btn-accent" type="button" disabled>
+            解答生成 (Solve)
+          </button>
+          <button id="btnStopShare" class="btn btn-ghost" type="button" disabled>
+            Stop Share
+          </button>
+        </div>
+
+        <p class="hint">
+          画面共有 → 問題画面を映す → 「解答生成」をクリック。<br />
+          出力は正解の選択肢 / 入力語のみです。
+        </p>
+      </section>
+
+      <section class="panel preview-panel">
+        <h2 class="panel-title">Screen Preview</h2>
+        <div class="video-container">
+          <video id="previewVideo" autoplay playsinline muted></video>
+          <canvas id="captureCanvas" hidden></canvas>
+          <div class="video-placeholder" id="videoPlaceholder">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <rect x="2" y="3" width="20" height="14" rx="2" />
+              <path d="M8 21h8M12 17v4" />
+            </svg>
+            <p>画面共有を開始してください</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel answer-panel">
+        <h2 class="panel-title">Answer</h2>
+        <div class="answer-box" id="answerBox">
+          <p class="answer-placeholder">ここに正解が表示されます</p>
+        </div>
+        <div class="meta" id="metaInfo"></div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <span>Powered by WebLLM (local VLM) · Privacy-first · WebGPU</span>
+    </footer>
+  </div>
+
+  <script type="module" src="script.js"></script>
+</body>
+</html>
