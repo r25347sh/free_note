@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>QuizAI v3 — Gemini Flash</title>
+  <title>QuizAI v4 — Groq / OpenRouter</title>
   <link rel="stylesheet" href="style.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -15,7 +15,7 @@
       <div class="logo">
         <span class="logo-mark">Q</span>
         <span class="logo-text">QuizAI</span>
-        <span class="badge-light">v3</span>
+        <span class="badge-light">v4</span>
       </div>
       <div class="header-status" id="statusBadge">
         <span class="status-dot"></span>
@@ -28,16 +28,25 @@
         <h2 class="panel-title">Control</h2>
 
         <div class="control-group">
-          <label class="label">Gemini API Key（無料）</label>
+          <label class="label">Provider（無料）</label>
+          <select id="provider" class="select">
+            <option value="groq" selected>Groq（推奨・高速 Vision）</option>
+            <option value="openrouter">OpenRouter（free モデル）</option>
+          </select>
+        </div>
+
+        <div class="control-group">
+          <label class="label">API Key</label>
           <input
             id="apiKey"
             class="select"
             type="password"
-            placeholder="AIza…"
+            placeholder="gsk_… or sk-or-…"
             autocomplete="off"
             spellcheck="false"
           />
         </div>
+
         <div class="btn-row">
           <button id="btnSaveKey" class="btn btn-primary" type="button">Save Key</button>
           <button id="btnStartShare" class="btn btn-secondary" type="button" disabled>Start Screen Share</button>
@@ -54,13 +63,13 @@
         </div>
 
         <p class="hint">
-          <strong>v3</strong>：画面画像を <strong>Gemini 2.0 Flash</strong>（無料枠）に直接送信。<br />
-          ローカルLLM/OCRは使わない → 速い・正確・軽い。<br /><br />
-          キー取得：
-          <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" style="color:#5b8def">
-            aistudio.google.com/apikey
-          </a>
-          （無料・クレジットカード不要）
+          <strong>v4</strong>：Gemini 不可の場合用。<br /><br />
+          <strong>Groq</strong>（推奨）<br />
+          キー: <a href="https://console.groq.com/keys" target="_blank" rel="noopener" style="color:#5b8def">console.groq.com/keys</a><br />
+          無料・クレカ不要・Vision対応・高速<br /><br />
+          <strong>OpenRouter</strong><br />
+          キー: <a href="https://openrouter.ai/keys" target="_blank" rel="noopener" style="color:#5b8def">openrouter.ai/keys</a><br />
+          free モデル 約50回/日
         </p>
       </section>
 
@@ -89,7 +98,7 @@
     </main>
 
     <footer class="footer">
-      <span>Screen Capture API · Gemini 2.0 Flash · key stays in your browser</span>
+      <span>Screen Capture API · Groq / OpenRouter · key stays in browser</span>
     </footer>
   </div>
   <script type="module" src="script.js"></script>
