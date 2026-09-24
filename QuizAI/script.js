@@ -1,12 +1,12 @@
 /**
- * QuizAI v3 — Gemini Flash (free) primary
- * Screen Capture API → image → Gemini 2.0 Flash → answer only
- * Fast + accurate. Local LLM removed as primary.
+ * QuizAI v4 — Groq Vision (free) primary + OpenRouter free fallback
+ * Screen Capture API → image → vision model → answer only
  */
 
 const $ = (id) => document.getElementById(id);
 
 const el = {
+  provider: $("provider"),
   apiKey: $("apiKey"),
   btnSaveKey: $("btnSaveKey"),
   btnStartShare: $("btnStartShare"),
@@ -27,7 +27,7 @@ const el = {
 let mediaStream = null;
 let isSolving = false;
 
-const STORAGE_KEY = "quizai_gemini_key";
+const STORAGE_KEY = "quizai_v4_cfg";
 
 function setStatus(state, text) {
   el.statusBadge.dataset.state = state;
@@ -55,34 +55,56 @@ function setMeta(msg) {
   el.metaInfo.textContent = msg || "";
 }
 
+function loadCfg() {
+  try {
+    return JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
+  } catch {
+    return {};
+  }
+}
+function saveCfg(partial) {
+  const cfg = { ...loadCfg(), ...partial };
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(cfg));
+  return cfg;
+}
+
+function getProvider() {
+  return el.provider?.value || loadCfg().provider || "groq";
+}
 function getApiKey() {
-  return (el.apiKey?.value || localStorage.getItem(STORAGE_KEY) || "").trim();
+  return (el.apiKey?.value || loadCfg().key || "").trim();
 }
 
 function saveKey() {
-  const k = (el.apiKey?.value || "").trim();
-  if (!k) {
+  const key = (el.apiKey?.value || "").trim();
+  const provider = getProvider();
+  if (!key) {
     alert("APIキーを入力してください");
     return;
   }
-  localStorage.setItem(STORAGE_KEY, k);
-  setMeta("API key saved (localStorage only)");
+  saveCfg({ key, provider });
+  setMeta(`${provider} key saved (localStorage only)`);
   setStatus("ready-model", "Key ready");
   el.btnStartShare.disabled = false;
 }
 
-(function initKey() {
-  const saved = localStorage.getItem(STORAGE_KEY);
-  if (saved && el.apiKey) {
-    el.apiKey.value = saved;
+(function init() {
+  const cfg = loadCfg();
+  if (cfg.provider && el.provider) el.provider.value = cfg.provider;
+  if (cfg.key && el.apiKey) {
+    el.apiKey.value = cfg.key;
     setStatus("ready-model", "Key ready");
     el.btnStartShare.disabled = false;
   }
 })();
 
+el.provider?.addEventListener("change", () => {
+  saveCfg({ provider: getProvider() });
+});
+
 async function startScreenShare() {
   if (!getApiKey()) {
-    alert("先に Gemini API キーを保存してください");
+    alert("先に API キーを Save してください");
     return;
   }
   try {
@@ -117,7 +139,7 @@ function stopScreenShare() {
   setStatus(getApiKey() ? "ready-model" : "ready", getApiKey() ? "Key ready" : "Ready");
 }
 
-function captureFrameAsBase64() {
+function captureDataUrl() {
   const video = el.previewVideo;
   if (!video.videoWidth) throw new Error("Video not ready");
   const canvas = el.captureCanvas;
@@ -131,77 +153,92 @@ function captureFrameAsBase64() {
   }
   canvas.width = w;
   canvas.height = h;
-  const ctx = canvas.getContext("2d", { alpha: false });
-  ctx.drawImage(video, 0, 0, w, h);
-  const dataUrl = canvas.toDataURL("image/jpeg", 0.82);
-  const base64 = dataUrl.split(",")[1];
-  return { base64, mime: "image/jpeg", w, h };
+  canvas.getContext("2d", { alpha: false }).drawImage(video, 0, 0, w, h);
+  return canvas.toDataURL("image/jpeg", 0.85);
 }
 
-const SYSTEM = `You are solving a Japanese junior-high / high-school English quiz from a screenshot.
+const SYSTEM = `You solve Japanese junior-high English quizzes from screenshots.
 
-The screen shows either:
-- Fill-in-the-blank: English sentence with [ ] blank + Japanese meaning + 4 English options
-- Multiple choice vocabulary
-- Input type (type the English word)
+Screen types:
+- Fill-in-the-blank with [ ] + Japanese meaning + 4 options
+- Vocabulary multiple choice
+- Type-the-word input
 
 Rules:
-1. Read the Japanese meaning carefully — it tells you the correct English.
-2. If there are options (1/4, 2/4…), pick EXACTLY one option word.
-3. Output ONLY that single English word or short phrase.
-4. No quotes, no numbers, no explanation, no Japanese.
+1. Trust the Japanese meaning.
+2. If options exist, output EXACTLY one option word.
+3. Output ONLY the English answer word. No quotes, numbers, or explanation.
 
 Examples:
-- 「ミーティングに出席する」 + options apply/attach/attend/attain → attend
-- 「戦争は4年続いた」 + caused/lasted/stood/moved → lasted
-- 「炎症」 + flatter/inflammation/inflict/plantation → inflammation
+- ミーティングに出席する → attend (not apply/attach/attain)
+- 戦争は4年続いた → lasted
+- 炎症 → inflammation
 
 Answer with only the correct word.`;
 
-async function callGemini(base64, mime) {
-  const key = getApiKey();
-  if (!key) throw new Error("No API key");
-
-  const url =
-    "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" +
-    encodeURIComponent(key);
-
-  const body = {
-    contents: [
-      {
-        role: "user",
-        parts: [
-          { text: SYSTEM },
-          {
-            inline_data: {
-              mime_type: mime,
-              data: base64,
-            },
-          },
-        ],
-      },
-    ],
-    generationConfig: {
-      temperature: 0.1,
-      maxOutputTokens: 16,
-    },
-  };
-
-  const res = await fetch(url, {
+async function callOpenAICompatible({ baseUrl, key, model, dataUrl }) {
+  const res = await fetch(`${baseUrl}/chat/completions`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${key}`,
+    },
+    body: JSON.stringify({
+      model,
+      temperature: 0.1,
+      max_tokens: 20,
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "text", text: SYSTEM },
+            { type: "image_url", image_url: { url: dataUrl } },
+          ],
+        },
+      ],
+    }),
   });
 
   if (!res.ok) {
-    const errText = await res.text();
-    throw new Error(`Gemini ${res.status}: ${errText.slice(0, 200)}`);
+    const t = await res.text();
+    throw new Error(`${res.status}: ${t.slice(0, 220)}`);
+  }
+  const data = await res.json();
+  return data?.choices?.[0]?.message?.content?.trim() || "";
+}
+
+async function callProvider(dataUrl) {
+  const provider = getProvider();
+  const key = getApiKey();
+
+  if (provider === "groq") {
+    return callOpenAICompatible({
+      baseUrl: "https://api.groq.com/openai/v1",
+      key,
+      model: "qwen/qwen3.8-27b",
+      dataUrl,
+    });
   }
 
-  const data = await res.json();
-  const text =
-    data?.candidates?.[0]?.content?.parts?.map((p) => p.text).join("") || "";
-  return String(text).trim();
+  if (provider === "openrouter") {
+    try {
+      return await callOpenAICompatible({
+        baseUrl: "https://openrouter.ai/api/v1",
+        key,
+        model: "openrouter/free",
+        dataUrl,
+      });
+    } catch (e1) {
+      return callOpenAICompatible({
+        baseUrl: "https://openrouter.ai/api/v1",
+        key,
+        model: "qwen/qwen2.5-vl-72b-instruct:free",
+        dataUrl,
+      });
+    }
+  }
+
+  throw new Error("Unknown provider");
 }
 
 function cleanAnswer(raw) {
@@ -212,9 +249,10 @@ function cleanAnswer(raw) {
     .replace(/^["'`]+|["'`]+$/g, "")
     .replace(/^\d+[\.\)]\s*/, "")
     .trim();
+  s = s.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
   if (s.includes(" ")) {
-    const parts = s.split(/\s+/);
-    if (parts.length <= 3) return s.toLowerCase();
+    const parts = s.split(/\s+/).filter(Boolean);
+    if (parts.length <= 3) return parts.join(" ").toLowerCase();
     return parts[0].toLowerCase();
   }
   return s.toLowerCase();
@@ -223,26 +261,26 @@ function cleanAnswer(raw) {
 async function solve() {
   if (!mediaStream || isSolving) return;
   if (!getApiKey()) {
-    alert("APIキーを保存してください");
+    alert("APIキーを Save してください");
     return;
   }
 
   isSolving = true;
   el.btnSolve.disabled = true;
-  setStatus("loading", "Gemini…");
+  setStatus("loading", "Solving…");
   renderAnswer("…");
-  showProgress(20, "Capture");
+  showProgress(15, "Capture");
   const t0 = performance.now();
 
   try {
-    const { base64, mime } = captureFrameAsBase64();
-    showProgress(50, "Gemini Flash");
-    const raw = await callGemini(base64, mime);
+    const dataUrl = captureDataUrl();
+    showProgress(45, getProvider());
+    const raw = await callProvider(dataUrl);
     const answer = cleanAnswer(raw);
     hideProgress();
     renderAnswer(answer);
     const ms = Math.round(performance.now() - t0);
-    setMeta(`${ms} ms · raw: "${raw.slice(0, 40)}"`);
+    setMeta(`${ms} ms · ${getProvider()} · raw: "${String(raw).slice(0, 36)}"`);
     setStatus("sharing", "Sharing");
   } catch (err) {
     console.error(err);
@@ -269,4 +307,4 @@ document.addEventListener("keydown", (e) => {
 });
 
 setStatus("ready", "Ready");
-setMeta("Gemini APIキーを入力 → Save → Share → Solve");
+setMeta("Groq 推奨（無料・高速）。キー取得 → Save → Share → Solve");
