@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>QuizAI — Screen Share Answer Engine</title>
+  <title>QuizAI — Light (OCR + Small LLM)</title>
   <link rel="stylesheet" href="style.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -15,6 +15,7 @@
       <div class="logo">
         <span class="logo-mark">Q</span>
         <span class="logo-text">QuizAI</span>
+        <span class="badge-light">Light</span>
       </div>
       <div class="header-status" id="statusBadge">
         <span class="status-dot"></span>
@@ -27,13 +28,19 @@
         <h2 class="panel-title">Control</h2>
 
         <div class="control-group">
-          <label class="label">Model</label>
+          <label class="label">Model (text only · light)</label>
           <select id="modelSelect" class="select">
-            <option value="Phi-3.5-vision-instruct-q4f16_1-MLC" selected>
-              Phi-3.5 Vision (q4f16) — Recommended
+            <option value="SmolLM2-360M-Instruct-q4f16_1-MLC" selected>
+              SmolLM2 360M (~200MB) — 最軽量
             </option>
-            <option value="Phi-3.5-vision-instruct-q4f32_1-MLC">
-              Phi-3.5 Vision (q4f32) — Higher precision
+            <option value="Qwen2.5-0.5B-Instruct-q4f16_1-MLC">
+              Qwen2.5 0.5B (~350MB)
+            </option>
+            <option value="Llama-3.2-1B-Instruct-q4f16_1-MLC">
+              Llama 3.2 1B (~700MB)
+            </option>
+            <option value="TinyLlama-1.1B-Chat-v1.0-q4f16_1-MLC">
+              TinyLlama 1.1B (~600MB)
             </option>
           </select>
         </div>
@@ -64,8 +71,9 @@
         </div>
 
         <p class="hint">
-          画面共有 → 問題画面を映す → 「解答生成」をクリック。<br />
-          出力は正解の選択肢 / 入力語のみです。
+          <strong>軽量版</strong>：OCR (Tesseract) + 小型テキストLLM。<br />
+          VRAM 数百MB〜1GB程度で動作。クラッシュしにくいです。<br />
+          画面共有 → 問題を映す → 解答生成。
         </p>
       </section>
 
@@ -90,11 +98,14 @@
           <p class="answer-placeholder">ここに正解が表示されます</p>
         </div>
         <div class="meta" id="metaInfo"></div>
+
+        <h2 class="panel-title" style="margin-top:1.25rem">OCR Preview</h2>
+        <pre class="ocr-box" id="ocrPreview">(OCR結果がここに出ます)</pre>
       </section>
     </main>
 
     <footer class="footer">
-      <span>Powered by WebLLM (local VLM) · Privacy-first · WebGPU</span>
+      <span>Screen Capture API · Tesseract.js OCR · WebLLM (tiny) · Privacy-first</span>
     </footer>
   </div>
 
