@@ -396,3 +396,32 @@ body {
   color: var(--text-muted);
   padding: 0.5rem 0;
 }
+
+/* Light badge */
+.badge-light {
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: #22c55e33;
+  color: #22c55e;
+  padding: 0.2rem 0.5rem;
+  border-radius: 6px;
+  margin-left: 0.35rem;
+}
+
+/* OCR preview */
+.ocr-box {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.85rem 1rem;
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  max-height: 140px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.45;
+}
