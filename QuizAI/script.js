@@ -3,6 +3,7 @@
  * - auto clipboard copy
  * - min 22s between solves (ITPM ~7000, image ~2048 tok)
  * - 429 auto-retry
+ * - dual Solve buttons
  */
 
 const $ = (id) => document.getElementById(id);
@@ -14,6 +15,7 @@ const el = {
   btnStartShare: $("btnStartShare"),
   btnStopShare: $("btnStopShare"),
   btnSolve: $("btnSolve"),
+  btnSolve2: $("btnSolve2"),
   progressWrap: $("progressWrap"),
   progressFill: $("progressFill"),
   progressText: $("progressText"),
@@ -29,7 +31,7 @@ const el = {
 let mediaStream = null;
 let isSolving = false;
 let lastSolveAt = 0;
-const MIN_INTERVAL_MS = 22000; // ~3 images/min under ITPM 7000 (2048 tok/image)
+const MIN_INTERVAL_MS = 22000;
 
 const STORAGE_KEY = "quizai_v4_cfg";
 
@@ -82,6 +84,12 @@ async function copyAnswer(text) {
 
 function setMeta(msg) {
   el.metaInfo.textContent = msg || "";
+}
+
+function setSolveEnabled(on) {
+  const v = !on;
+  if (el.btnSolve) el.btnSolve.disabled = v;
+  if (el.btnSolve2) el.btnSolve2.disabled = v;
 }
 
 function loadCfg() {
@@ -146,7 +154,7 @@ async function startScreenShare() {
     el.videoPlaceholder.classList.add("hidden");
     el.btnStartShare.disabled = true;
     el.btnStopShare.disabled = false;
-    el.btnSolve.disabled = false;
+    setSolveEnabled(true);
     setStatus("sharing", "Sharing");
     mediaStream.getVideoTracks()[0].addEventListener("ended", stopScreenShare);
   } catch (err) {
@@ -164,7 +172,7 @@ function stopScreenShare() {
   el.videoPlaceholder.classList.remove("hidden");
   el.btnStartShare.disabled = !getApiKey();
   el.btnStopShare.disabled = true;
-  el.btnSolve.disabled = true;
+  setSolveEnabled(false);
   setStatus(getApiKey() ? "ready-model" : "ready", getApiKey() ? "Key ready" : "Ready");
 }
 
@@ -321,12 +329,12 @@ async function solve() {
   const waitLeft = MIN_INTERVAL_MS - (now - lastSolveAt);
   if (waitLeft > 0) {
     setMeta(`クールダウン中… ${Math.ceil(waitLeft / 1000)}s（トークン制限対策）`);
-    el.btnSolve.disabled = true;
+    setSolveEnabled(false);
     await sleep(waitLeft);
   }
 
   isSolving = true;
-  el.btnSolve.disabled = true;
+  setSolveEnabled(false);
   setStatus("loading", "Solving…");
   renderAnswer("…");
   showProgress(15, "Capture");
@@ -356,19 +364,20 @@ async function solve() {
     setStatus("error", "Failed");
   } finally {
     isSolving = false;
-    el.btnSolve.disabled = !mediaStream;
+    setSolveEnabled(!!mediaStream);
   }
 }
 
 el.btnSaveKey?.addEventListener("click", saveKey);
 el.btnStartShare.addEventListener("click", startScreenShare);
 el.btnStopShare.addEventListener("click", stopScreenShare);
-el.btnSolve.addEventListener("click", solve);
+el.btnSolve?.addEventListener("click", solve);
+el.btnSolve2?.addEventListener("click", solve);
 
 document.addEventListener("keydown", (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
     e.preventDefault();
-    if (!el.btnSolve.disabled) solve();
+    if (el.btnSolve && !el.btnSolve.disabled) solve();
   }
 });
 
