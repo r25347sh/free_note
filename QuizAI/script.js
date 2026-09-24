@@ -1,7 +1,8 @@
 /**
- * QuizAI v4 — Groq Vision (free) primary + OpenRouter free fallback
- * Screen Capture API → image → vision model → answer only
- * + auto clipboard copy on success
+ * QuizAI v4.1 — Groq Vision + rate-limit friendly
+ * - auto clipboard copy
+ * - min 22s between solves (ITPM ~7000, image ~2048 tok)
+ * - 429 auto-retry
  */
 
 const $ = (id) => document.getElementById(id);
@@ -27,6 +28,8 @@ const el = {
 
 let mediaStream = null;
 let isSolving = false;
+let lastSolveAt = 0;
+const MIN_INTERVAL_MS = 22000; // ~3 images/min under ITPM 7000 (2048 tok/image)
 
 const STORAGE_KEY = "quizai_v4_cfg";
 
@@ -169,7 +172,7 @@ function captureDataUrl() {
   const video = el.previewVideo;
   if (!video.videoWidth) throw new Error("Video not ready");
   const canvas = el.captureCanvas;
-  const maxSide = 1024;
+  const maxSide = 768;
   let w = video.videoWidth;
   let h = video.videoHeight;
   if (Math.max(w, h) > maxSide) {
@@ -180,7 +183,7 @@ function captureDataUrl() {
   canvas.width = w;
   canvas.height = h;
   canvas.getContext("2d", { alpha: false }).drawImage(video, 0, 0, w, h);
-  return canvas.toDataURL("image/jpeg", 0.85);
+  return canvas.toDataURL("image/jpeg", 0.7);
 }
 
 const SYSTEM = `You solve Japanese junior-high English quizzes from screenshots.
@@ -202,7 +205,17 @@ Examples:
 
 Answer with only the correct word.`;
 
-async function callOpenAICompatible({ baseUrl, key, model, dataUrl }) {
+function sleep(ms) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+function parseRetryMs(errText) {
+  const m = String(errText).match(/try again in\s*([\d.]+)\s*s/i);
+  if (m) return Math.ceil(parseFloat(m[1]) * 1000) + 500;
+  return 25000;
+}
+
+async function callOpenAICompatible({ baseUrl, key, model, dataUrl }, attempt = 1) {
   const res = await fetch(`${baseUrl}/chat/completions`, {
     method: "POST",
     headers: {
@@ -227,6 +240,19 @@ async function callOpenAICompatible({ baseUrl, key, model, dataUrl }) {
 
   if (!res.ok) {
     const t = await res.text();
+    if (res.status === 429 && attempt < 3) {
+      const wait = parseRetryMs(t);
+      setMeta(`Rate limit — ${Math.ceil(wait / 1000)}s 待って再試行…`);
+      showProgress(30, `wait ${Math.ceil(wait / 1000)}s`);
+      await sleep(wait);
+      return callOpenAICompatible({ baseUrl, key, model, dataUrl }, attempt + 1);
+    }
+    if (res.status === 429) {
+      throw new Error(
+        "429 レート制限（入力トークン/分）。約20〜30秒待ってから再実行してください。\n" +
+          t.slice(0, 160)
+      );
+    }
     throw new Error(`${res.status}: ${t.slice(0, 220)}`);
   }
   const data = await res.json();
@@ -291,12 +317,21 @@ async function solve() {
     return;
   }
 
+  const now = Date.now();
+  const waitLeft = MIN_INTERVAL_MS - (now - lastSolveAt);
+  if (waitLeft > 0) {
+    setMeta(`クールダウン中… ${Math.ceil(waitLeft / 1000)}s（トークン制限対策）`);
+    el.btnSolve.disabled = true;
+    await sleep(waitLeft);
+  }
+
   isSolving = true;
   el.btnSolve.disabled = true;
   setStatus("loading", "Solving…");
   renderAnswer("…");
   showProgress(15, "Capture");
   const t0 = performance.now();
+  lastSolveAt = Date.now();
 
   try {
     const dataUrl = captureDataUrl();
@@ -338,4 +373,4 @@ document.addEventListener("keydown", (e) => {
 });
 
 setStatus("ready", "Ready");
-setMeta("Groq 推奨（無料・高速）。キー取得 → Save → Share → Solve");
+setMeta("Groq: 約22秒間隔推奨（無料枠 ITPM 対策）");
