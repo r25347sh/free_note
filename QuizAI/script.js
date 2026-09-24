@@ -1,7 +1,8 @@
 /**
- * QuizAI v4.1 — Groq Vision + rate-limit friendly
+ * QuizAI v4.2 — Groq Vision + rate-limit friendly
+ * - EN↔JA bidirectional answers
  * - auto clipboard copy
- * - min 22s between solves (ITPM ~7000, image ~2048 tok)
+ * - min 22s between solves
  * - 429 auto-retry
  * - dual Solve buttons
  */
@@ -196,22 +197,28 @@ function captureDataUrl() {
 
 const SYSTEM = `You solve Japanese junior-high English quizzes from screenshots.
 
+Directions (both exist):
+A) Japanese → English (意味から英単語を選ぶ / 穴埋め)
+B) English → Japanese (英単語・英文の日本語訳を選ぶ・入力)
+
 Screen types:
-- Fill-in-the-blank with [ ] + Japanese meaning + 4 options
-- Vocabulary multiple choice
-- Type-the-word input
+- Fill-in-the-blank with [ ] + meaning + 4 options
+- Vocabulary multiple choice (EN or JA options)
+- Type-the-word input (EN or JA)
 
 Rules:
-1. Trust the Japanese meaning.
-2. If options exist, output EXACTLY one option word.
-3. Output ONLY the English answer word. No quotes, numbers, or explanation.
+1. Decide whether the expected answer is English or Japanese from the screen.
+2. If options are shown, output EXACTLY one option as written (same language).
+3. Trust Japanese gloss for EN answers; trust English stem for JA answers.
+4. Output ONLY the correct answer text. No quotes, numbers, labels, or explanation.
 
 Examples:
-- ミーティングに出席する → attend (not apply/attach/attain)
-- 戦争は4年続いた → lasted
+- ミーティングに出席する → attend
+- The war [ ] four years. / 戦争は4年続いた → lasted
 - 炎症 → inflammation
+- English "attend" asked in Japanese → 出席する (or matching JA option)
 
-Answer with only the correct word.`;
+Answer with only the correct choice.`;
 
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
@@ -233,7 +240,7 @@ async function callOpenAICompatible({ baseUrl, key, model, dataUrl }, attempt = 
     body: JSON.stringify({
       model,
       temperature: 0.1,
-      max_tokens: 20,
+      max_tokens: 40,
       messages: [
         {
           role: "user",
@@ -310,9 +317,17 @@ function cleanAnswer(raw) {
     .replace(/^\d+[\.\)]\s*/, "")
     .trim();
   s = s.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+
+  // Japanese answers: keep as-is (do not lower-case)
+  const hasJa = /[\u3040-\u30ff\u3400-\u9fff]/.test(s);
+  if (hasJa) {
+    s = s.replace(/^[0-9A-Da-dア-エａ-ｄ][\.\)．、]\s*/, "").trim();
+    return s;
+  }
+
   if (s.includes(" ")) {
     const parts = s.split(/\s+/).filter(Boolean);
-    if (parts.length <= 3) return parts.join(" ").toLowerCase();
+    if (parts.length <= 4) return parts.join(" ").toLowerCase();
     return parts[0].toLowerCase();
   }
   return s.toLowerCase();
