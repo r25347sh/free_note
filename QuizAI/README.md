@@ -1,43 +1,29 @@
-# QuizAI (Light)
+# QuizAI v3 — Gemini Flash
 
-**軽量版** — Screen Capture API + Tesseract.js OCR + 小型 WebLLM テキストモデル。
+画面共有 → スクショを **Gemini 2.0 Flash（無料）** に送って正解だけ返す。
 
-重い Vision モデル (Phi-3.5 ~4GB) をやめ、OCR → 小型LLM に変更しました。  
-クラッシュ / 強制リロードが起きにくくなっています。
+## なぜ v3 か
 
-## 構成
+| 版 | 方式 | 問題 |
+|----|------|------|
+| v1 | WebLLM Vision ~4GB | クラッシュ |
+| v2 | OCR + 小型LLM | 誤答・17秒・重い |
+| **v3** | **Gemini Flash 画像直接** | 速い・正確・軽い |
 
-| 層 | 技術 | 目安サイズ |
-|----|------|------------|
-| 画面取得 | Screen Capture API (`getDisplayMedia`) | — |
-| 文字認識 | Tesseract.js (jpn+eng) | ~数十MB |
-| 解答生成 | WebLLM テキストモデル | 200–700 MB |
+## セットアップ（完全無料）
 
-## モデル選択
+1. [Google AI Studio](https://aistudio.google.com/apikey) で API キー発行（クレカ不要）
+2. サイトでキーを貼って **Save Key**（localStorage のみ・サーバーに送らない）
+3. **Start Screen Share** → 問題ウィンドウを選択
+4. **解答生成** または `Ctrl/Cmd+Enter`
 
-- **SmolLM2 360M** … 最軽量・推奨
-- Qwen2.5 0.5B
-- Llama 3.2 1B
-- TinyLlama 1.1B
+## 技術
 
-## 使い方
-
-```bash
-cd QuizAI
-npx serve .
-```
-
-1. Load Model（初回のみダウンロード）
-2. Start Screen Share → 問題ウィンドウを選択
-3. 解答生成 (Solve) または `Ctrl/Cmd+Enter`
-4. Answer に正解のみ表示（`<p>`）
-
-## ファイル
-
-- `index.html` / `style.css` / `script.js`
+- Screen Capture API (`getDisplayMedia`)
+- 画像を JPEG でキャプチャ → Gemini 2.0 Flash `generateContent`
+- 出力は正解ワードのみ（`<p>`）
 
 ## 注意
 
-- OCR 精度は画面の解像度・フォントに依存します
-- 日本語が薄く見える場合は共有ウィンドウを大きくしてください
-- 試験での不正利用は避けてください
+- 無料枠のレート制限あり（通常のクイズ用途では十分なことが多い）
+- 試験での不正利用はしないこと

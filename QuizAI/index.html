@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>QuizAI Light v2</title>
+  <title>QuizAI v3 — Gemini Flash</title>
   <link rel="stylesheet" href="style.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -15,7 +15,7 @@
       <div class="logo">
         <span class="logo-mark">Q</span>
         <span class="logo-text">QuizAI</span>
-        <span class="badge-light">v2</span>
+        <span class="badge-light">v3</span>
       </div>
       <div class="header-status" id="statusBadge">
         <span class="status-dot"></span>
@@ -28,22 +28,18 @@
         <h2 class="panel-title">Control</h2>
 
         <div class="control-group">
-          <label class="label">Model</label>
-          <select id="modelSelect" class="select">
-            <option value="Qwen2.5-0.5B-Instruct-q4f16_1-MLC" selected>
-              Qwen2.5 0.5B (~350MB) — 推奨
-            </option>
-            <option value="SmolLM2-360M-Instruct-q4f16_1-MLC">
-              SmolLM2 360M (~200MB)
-            </option>
-            <option value="Llama-3.2-1B-Instruct-q4f16_1-MLC">
-              Llama 3.2 1B (~700MB)
-            </option>
-          </select>
+          <label class="label">Gemini API Key（無料）</label>
+          <input
+            id="apiKey"
+            class="select"
+            type="password"
+            placeholder="AIza…"
+            autocomplete="off"
+            spellcheck="false"
+          />
         </div>
-
         <div class="btn-row">
-          <button id="btnLoadModel" class="btn btn-primary" type="button">Load Model</button>
+          <button id="btnSaveKey" class="btn btn-primary" type="button">Save Key</button>
           <button id="btnStartShare" class="btn btn-secondary" type="button" disabled>Start Screen Share</button>
         </div>
 
@@ -58,9 +54,13 @@
         </div>
 
         <p class="hint">
-          <strong>v2</strong>: OCRで選択肢を抽出し、必ずその中から選ぶ。<br />
-          日本語訳がある問題はヒューリスティックで即答（数ms）。<br />
-          TinyLlama は精度不足のため削除。Qwen2.5-0.5B を推奨。
+          <strong>v3</strong>：画面画像を <strong>Gemini 2.0 Flash</strong>（無料枠）に直接送信。<br />
+          ローカルLLM/OCRは使わない → 速い・正確・軽い。<br /><br />
+          キー取得：
+          <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" style="color:#5b8def">
+            aistudio.google.com/apikey
+          </a>
+          （無料・クレジットカード不要）
         </p>
       </section>
 
@@ -85,13 +85,11 @@
           <p class="answer-placeholder">正解のみ表示</p>
         </div>
         <div class="meta" id="metaInfo"></div>
-        <h2 class="panel-title" style="margin-top:1.25rem">OCR Preview</h2>
-        <pre class="ocr-box" id="ocrPreview">(OCR)</pre>
       </section>
     </main>
 
     <footer class="footer">
-      <span>Screen Capture API · Tesseract · WebLLM · option-constrained</span>
+      <span>Screen Capture API · Gemini 2.0 Flash · key stays in your browser</span>
     </footer>
   </div>
   <script type="module" src="script.js"></script>
