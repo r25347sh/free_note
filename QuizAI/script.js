@@ -1,17 +1,14 @@
 /**
- * QuizAI Light v2 — Speed + Accuracy focused
- * Screen Capture API + Tesseract OCR + structured option matching
- * LLM only as fallback; prefer option list constraint
+ * QuizAI v3 — Gemini Flash (free) primary
+ * Screen Capture API → image → Gemini 2.0 Flash → answer only
+ * Fast + accurate. Local LLM removed as primary.
  */
-
-import * as webllm from "https://esm.run/@mlc-ai/web-llm";
-import Tesseract from "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.esm.min.js";
 
 const $ = (id) => document.getElementById(id);
 
 const el = {
-  modelSelect: $("modelSelect"),
-  btnLoadModel: $("btnLoadModel"),
+  apiKey: $("apiKey"),
+  btnSaveKey: $("btnSaveKey"),
   btnStartShare: $("btnStartShare"),
   btnStopShare: $("btnStopShare"),
   btnSolve: $("btnSolve"),
@@ -25,13 +22,12 @@ const el = {
   metaInfo: $("metaInfo"),
   statusBadge: $("statusBadge"),
   statusText: $("statusText"),
-  ocrPreview: $("ocrPreview"),
 };
 
-let engine = null;
 let mediaStream = null;
 let isSolving = false;
-let ocrWorker = null;
+
+const STORAGE_KEY = "quizai_gemini_key";
 
 function setStatus(state, text) {
   el.statusBadge.dataset.state = state;
@@ -46,7 +42,10 @@ function hideProgress() {
   el.progressWrap.hidden = true;
 }
 function renderAnswer(text) {
-  const clean = String(text || "").replace(/<[^>]*>/g, "").trim();
+  const clean = String(text || "")
+    .replace(/<[^>]*>/g, "")
+    .replace(/^["'`\s]+|["'`\s]+$/g, "")
+    .trim();
   el.answerBox.innerHTML = "";
   const p = document.createElement("p");
   p.textContent = clean || "—";
@@ -56,45 +55,39 @@ function setMeta(msg) {
   el.metaInfo.textContent = msg || "";
 }
 
-async function loadModel() {
-  if (engine) {
-    try { await engine.unload(); } catch (_) {}
-    engine = null;
-  }
-  const modelId = el.modelSelect.value;
-  el.btnLoadModel.disabled = true;
-  el.btnStartShare.disabled = true;
-  el.btnSolve.disabled = true;
-  setStatus("loading", "Loading…");
-  showProgress(0, "cache / download…");
-
-  try {
-    engine = await webllm.CreateMLCEngine(modelId, {
-      initProgressCallback: (r) => {
-        const pct = Math.round((r.progress || 0) * 100);
-        showProgress(pct, r.text || `${pct}%`);
-      },
-      logLevel: "WARN",
-    });
-    hideProgress();
-    setStatus("ready-model", "Model ready");
-    el.btnStartShare.disabled = false;
-    el.btnLoadModel.disabled = false;
-    setMeta(`OK: ${modelId}`);
-  } catch (err) {
-    console.error(err);
-    hideProgress();
-    setStatus("error", "Load failed");
-    el.btnLoadModel.disabled = false;
-    setMeta(String(err.message || err));
-    alert("モデル読み込み失敗:\n" + (err.message || err));
-  }
+function getApiKey() {
+  return (el.apiKey?.value || localStorage.getItem(STORAGE_KEY) || "").trim();
 }
 
+function saveKey() {
+  const k = (el.apiKey?.value || "").trim();
+  if (!k) {
+    alert("APIキーを入力してください");
+    return;
+  }
+  localStorage.setItem(STORAGE_KEY, k);
+  setMeta("API key saved (localStorage only)");
+  setStatus("ready-model", "Key ready");
+  el.btnStartShare.disabled = false;
+}
+
+(function initKey() {
+  const saved = localStorage.getItem(STORAGE_KEY);
+  if (saved && el.apiKey) {
+    el.apiKey.value = saved;
+    setStatus("ready-model", "Key ready");
+    el.btnStartShare.disabled = false;
+  }
+})();
+
 async function startScreenShare() {
+  if (!getApiKey()) {
+    alert("先に Gemini API キーを保存してください");
+    return;
+  }
   try {
     mediaStream = await navigator.mediaDevices.getDisplayMedia({
-      video: { cursor: "never", frameRate: { ideal: 4, max: 6 } },
+      video: { cursor: "never", frameRate: { ideal: 5, max: 8 } },
       audio: false,
     });
     el.previewVideo.srcObject = mediaStream;
@@ -102,7 +95,7 @@ async function startScreenShare() {
     el.videoPlaceholder.classList.add("hidden");
     el.btnStartShare.disabled = true;
     el.btnStopShare.disabled = false;
-    el.btnSolve.disabled = !engine;
+    el.btnSolve.disabled = false;
     setStatus("sharing", "Sharing");
     mediaStream.getVideoTracks()[0].addEventListener("ended", stopScreenShare);
   } catch (err) {
@@ -118,17 +111,17 @@ function stopScreenShare() {
   el.previewVideo.srcObject = null;
   el.previewVideo.classList.remove("active");
   el.videoPlaceholder.classList.remove("hidden");
-  el.btnStartShare.disabled = !engine;
+  el.btnStartShare.disabled = !getApiKey();
   el.btnStopShare.disabled = true;
   el.btnSolve.disabled = true;
-  setStatus(engine ? "ready-model" : "ready", engine ? "Model ready" : "Ready");
+  setStatus(getApiKey() ? "ready-model" : "ready", getApiKey() ? "Key ready" : "Ready");
 }
 
-function captureFrameAsBlob() {
+function captureFrameAsBase64() {
   const video = el.previewVideo;
   if (!video.videoWidth) throw new Error("Video not ready");
   const canvas = el.captureCanvas;
-  const maxSide = 1200;
+  const maxSide = 1024;
   let w = video.videoWidth;
   let h = video.videoHeight;
   if (Math.max(w, h) > maxSide) {
@@ -139,209 +132,117 @@ function captureFrameAsBlob() {
   canvas.width = w;
   canvas.height = h;
   const ctx = canvas.getContext("2d", { alpha: false });
-  ctx.filter = "contrast(1.15) brightness(1.05)";
   ctx.drawImage(video, 0, 0, w, h);
-  ctx.filter = "none";
-  return new Promise((res) => canvas.toBlob((b) => res(b), "image/png"));
+  const dataUrl = canvas.toDataURL("image/jpeg", 0.82);
+  const base64 = dataUrl.split(",")[1];
+  return { base64, mime: "image/jpeg", w, h };
 }
 
-async function ensureOCR() {
-  if (ocrWorker) return ocrWorker;
-  setMeta("OCR worker init…");
-  ocrWorker = await Tesseract.createWorker("eng+jpn", 1, {
-    logger: () => {},
-  });
-  await ocrWorker.setParameters({
-    tessedit_pageseg_mode: "6",
-  });
-  return ocrWorker;
-}
+const SYSTEM = `You are solving a Japanese junior-high / high-school English quiz from a screenshot.
 
-async function runOCR(blob) {
-  const worker = await ensureOCR();
-  const { data } = await worker.recognize(blob);
-  return (data.text || "").replace(/\r/g, "").trim();
-}
-
-function parseQuiz(ocrText) {
-  const lines = ocrText
-    .split("\n")
-    .map((l) => l.trim())
-    .filter((l) => l.length > 0);
-
-  const options = [];
-  const optionRe = /^[a-zA-Z][a-zA-Z\-']{1,24}$/;
-  for (const line of lines) {
-    const cleaned = line.replace(/\s*\d+\s*\/\s*\d+\s*$/, "").trim();
-    if (optionRe.test(cleaned)) {
-      options.push(cleaned.toLowerCase());
-    }
-  }
-  const uniqOptions = [...new Set(options)];
-
-  const jaRe = /[\u3040-\u30ff\u4e00-\u9fff]{2,}/;
-  let glossJa = "";
-  for (const line of lines) {
-    if (jaRe.test(line) && line.length < 80) {
-      glossJa = line;
-      break;
-    }
-  }
-
-  let stem = "";
-  for (const line of lines) {
-    if (
-      /[a-zA-Z]/.test(line) &&
-      (line.includes("[") || line.includes("]") || line.includes("＿") || line.includes("_") || line.includes("…"))
-    ) {
-      stem = line;
-      break;
-    }
-  }
-  if (!stem) {
-    let best = "";
-    for (const line of lines) {
-      if (/[a-zA-Z]{3,}/.test(line) && line.length > best.length && line.length < 120) {
-        best = line;
-      }
-    }
-    stem = best;
-  }
-
-  return { stem, glossJa, options: uniqOptions, raw: ocrText };
-}
-
-function heuristicAnswer(parsed) {
-  const { glossJa, options, stem } = parsed;
-  if (!options.length) return null;
-
-  const ja = glossJa || "";
-  const rules = [
-    { ja: /続い|続いた|続く/, en: ["lasted", "continued", "last"] },
-    { ja: /起こ|引き起こ|原因/, en: ["caused", "cause"] },
-    { ja: /立っ|立った|耐えた/, en: ["stood", "stand"] },
-    { ja: /動い|動いた|引っ越/, en: ["moved", "move"] },
-    { ja: /重大|重大な|深刻/, en: ["serious", "significant", "important", "critical"] },
-    { ja: /炎症/, en: ["inflammation"] },
-    { ja: /賞賛|お世辞|おべっか/, en: ["flatter", "flattery", "praise"] },
-    { ja: /与え|加える|負わせ/, en: ["inflict", "inflicted"] },
-    { ja: /農園|プランテーション/, en: ["plantation"] },
-  ];
-
-  for (const rule of rules) {
-    if (rule.ja.test(ja)) {
-      for (const cand of rule.en) {
-        const hit = options.find((o) => o === cand || o.startsWith(cand) || cand.startsWith(o));
-        if (hit) return hit;
-      }
-    }
-  }
-
-  if (/war/i.test(stem) && /year/i.test(stem) && /続/.test(ja)) {
-    const hit = options.find((o) => o === "lasted" || o === "last");
-    if (hit) return hit;
-  }
-
-  return null;
-}
-
-function buildStrictPrompt(parsed) {
-  const opts = parsed.options.length
-    ? parsed.options.map((o, i) => `${i + 1}. ${o}`).join("\n")
-    : "(no options detected)";
-
-  return `English fill-in-the-blank quiz. Pick the ONE correct option.
-
-Sentence: ${parsed.stem || "(unknown)"}
-Japanese meaning: ${parsed.glossJa || "(unknown)"}
-
-Options (you MUST output exactly one of these words, lowercase):
-${opts}
+The screen shows either:
+- Fill-in-the-blank: English sentence with [ ] blank + Japanese meaning + 4 English options
+- Multiple choice vocabulary
+- Input type (type the English word)
 
 Rules:
-- Output ONLY the correct option word.
-- No punctuation, no number, no explanation.
-- If Japanese says 続いた / continued for years → lasted
-- If Japanese says 引き起こした → caused
+1. Read the Japanese meaning carefully — it tells you the correct English.
+2. If there are options (1/4, 2/4…), pick EXACTLY one option word.
+3. Output ONLY that single English word or short phrase.
+4. No quotes, no numbers, no explanation, no Japanese.
 
-Answer:`;
+Examples:
+- 「ミーティングに出席する」 + options apply/attach/attend/attain → attend
+- 「戦争は4年続いた」 + caused/lasted/stood/moved → lasted
+- 「炎症」 + flatter/inflammation/inflict/plantation → inflammation
+
+Answer with only the correct word.`;
+
+async function callGemini(base64, mime) {
+  const key = getApiKey();
+  if (!key) throw new Error("No API key");
+
+  const url =
+    "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" +
+    encodeURIComponent(key);
+
+  const body = {
+    contents: [
+      {
+        role: "user",
+        parts: [
+          { text: SYSTEM },
+          {
+            inline_data: {
+              mime_type: mime,
+              data: base64,
+            },
+          },
+        ],
+      },
+    ],
+    generationConfig: {
+      temperature: 0.1,
+      maxOutputTokens: 16,
+    },
+  };
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`Gemini ${res.status}: ${errText.slice(0, 200)}`);
+  }
+
+  const data = await res.json();
+  const text =
+    data?.candidates?.[0]?.content?.parts?.map((p) => p.text).join("") || "";
+  return String(text).trim();
 }
 
-function constrainToOptions(raw, options) {
-  if (!options.length) return raw.trim().split(/\s+/)[0] || raw;
-  const lower = raw.toLowerCase().replace(/[^a-z\-']/g, " ");
-  for (const o of options) {
-    if (lower.includes(o)) return o;
+function cleanAnswer(raw) {
+  let s = String(raw || "")
+    .split("\n")[0]
+    .replace(/^answer\s*[:=]\s*/i, "")
+    .replace(/^正解\s*[:=]\s*/i, "")
+    .replace(/^["'`]+|["'`]+$/g, "")
+    .replace(/^\d+[\.\)]\s*/, "")
+    .trim();
+  if (s.includes(" ")) {
+    const parts = s.split(/\s+/);
+    if (parts.length <= 3) return s.toLowerCase();
+    return parts[0].toLowerCase();
   }
-  const token = lower.trim().split(/\s+/)[0];
-  const hit = options.find((o) => o === token || o.startsWith(token) || token.startsWith(o));
-  if (hit) return hit;
-  let best = options[0];
-  let bestScore = -1;
-  for (const o of options) {
-    let s = 0;
-    for (let i = 0; i < Math.min(o.length, token.length); i++) {
-      if (o[i] === token[i]) s++;
-      else break;
-    }
-    if (s > bestScore) {
-      bestScore = s;
-      best = o;
-    }
-  }
-  return best;
+  return s.toLowerCase();
 }
 
 async function solve() {
-  if (!engine || !mediaStream || isSolving) return;
+  if (!mediaStream || isSolving) return;
+  if (!getApiKey()) {
+    alert("APIキーを保存してください");
+    return;
+  }
+
   isSolving = true;
   el.btnSolve.disabled = true;
-  setStatus("loading", "Solving…");
+  setStatus("loading", "Gemini…");
   renderAnswer("…");
-  showProgress(10, "Capture");
+  showProgress(20, "Capture");
   const t0 = performance.now();
 
   try {
-    const blob = await captureFrameAsBlob();
-    showProgress(25, "OCR");
-    const ocrText = await runOCR(blob);
-    if (el.ocrPreview) el.ocrPreview.textContent = ocrText.slice(0, 500) || "(empty)";
-
-    const parsed = parseQuiz(ocrText);
-    setMeta(
-      `opts:[${parsed.options.join(", ")}] ja:${parsed.glossJa.slice(0, 30)}`
-    );
-
-    const heur = heuristicAnswer(parsed);
-    if (heur) {
-      hideProgress();
-      renderAnswer(heur);
-      const ms = Math.round(performance.now() - t0);
-      setMeta(`Heuristic ${ms} ms · options: ${parsed.options.join(", ")}`);
-      setStatus("sharing", "Sharing");
-      return;
-    }
-
-    showProgress(60, "LLM");
-    const prompt = buildStrictPrompt(parsed);
-    const reply = await engine.chat.completions.create({
-      messages: [{ role: "user", content: prompt }],
-      stream: false,
-      temperature: 0,
-      max_tokens: 12,
-    });
-
-    let raw =
-      reply.choices?.[0]?.message?.content ??
-      (await engine.getMessage()) ??
-      "";
-    raw = String(raw).split("\n")[0].trim();
-    const answer = constrainToOptions(raw, parsed.options);
-
+    const { base64, mime } = captureFrameAsBase64();
+    showProgress(50, "Gemini Flash");
+    const raw = await callGemini(base64, mime);
+    const answer = cleanAnswer(raw);
     hideProgress();
     renderAnswer(answer);
     const ms = Math.round(performance.now() - t0);
-    setMeta(`LLM ${ms} ms · raw:"${raw}" → ${answer}`);
+    setMeta(`${ms} ms · raw: "${raw.slice(0, 40)}"`);
     setStatus("sharing", "Sharing");
   } catch (err) {
     console.error(err);
@@ -355,7 +256,7 @@ async function solve() {
   }
 }
 
-el.btnLoadModel.addEventListener("click", loadModel);
+el.btnSaveKey?.addEventListener("click", saveKey);
 el.btnStartShare.addEventListener("click", startScreenShare);
 el.btnStopShare.addEventListener("click", stopScreenShare);
 el.btnSolve.addEventListener("click", solve);
@@ -367,9 +268,5 @@ document.addEventListener("keydown", (e) => {
   }
 });
 
-window.addEventListener("beforeunload", () => {
-  if (ocrWorker) ocrWorker.terminate().catch(() => {});
-});
-
 setStatus("ready", "Ready");
-setMeta("Qwen2.5-0.5B 推奨。Load Model → Share → Solve");
+setMeta("Gemini APIキーを入力 → Save → Share → Solve");
