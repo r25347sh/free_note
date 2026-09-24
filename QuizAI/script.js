@@ -1,10 +1,11 @@
 /**
- * QuizAI — Screen-share + WebLLM Vision quiz solver
- * Screen Capture API (getDisplayMedia) + local VLM
- * Separate files, performance-first, clean UI.
+ * QuizAI — Lightweight version
+ * Screen Capture API + Tesseract.js OCR + small WebLLM text model
+ * Avoids heavy VLM (no 4GB crash / forced reload)
  */
 
 import * as webllm from "https://esm.run/@mlc-ai/web-llm";
+import Tesseract from "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.esm.min.js";
 
 // ─── DOM ───────────────────────────────────────────────
 const $ = (id) => document.getElementById(id);
@@ -25,20 +26,21 @@ const el = {
   metaInfo: $("metaInfo"),
   statusBadge: $("statusBadge"),
   statusText: $("statusText"),
+  ocrPreview: $("ocrPreview"),
 };
 
 // ─── State ─────────────────────────────────────────────
 let engine = null;
 let mediaStream = null;
 let isSolving = false;
+let ocrWorker = null;
 
-// ─── Status helper ─────────────────────────────────────
+// ─── Status ────────────────────────────────────────────
 function setStatus(state, text) {
   el.statusBadge.dataset.state = state;
   el.statusText.textContent = text;
 }
 
-// ─── Progress ──────────────────────────────────────────
 function showProgress(pct, text) {
   el.progressWrap.hidden = false;
   el.progressFill.style.width = `${Math.min(100, Math.max(0, pct))}%`;
@@ -49,14 +51,11 @@ function hideProgress() {
   el.progressWrap.hidden = true;
 }
 
-// ─── Answer output (strict: only <p> with answer) ──────
 function renderAnswer(text) {
-  // Clean any accidental markup / extra whitespace
   const clean = String(text || "")
     .replace(/<[^>]*>/g, "")
     .replace(/^["'\s]+|["'\s]+$/g, "")
     .trim();
-
   el.answerBox.innerHTML = "";
   const p = document.createElement("p");
   p.textContent = clean || "—";
@@ -67,7 +66,7 @@ function setMeta(msg) {
   el.metaInfo.textContent = msg || "";
 }
 
-// ─── Model load ────────────────────────────────────────
+// ─── Model load (tiny text models only) ────────────────
 async function loadModel() {
   if (engine) {
     try {
@@ -81,12 +80,11 @@ async function loadModel() {
   el.btnStartShare.disabled = true;
   el.btnSolve.disabled = true;
   setStatus("loading", "Loading model…");
-  showProgress(0, "Starting download / cache check…");
+  showProgress(0, "Download / cache check…");
 
   try {
     engine = await webllm.CreateMLCEngine(modelId, {
       initProgressCallback: (report) => {
-        // report.progress is 0–1
         const pct = Math.round((report.progress || 0) * 100);
         showProgress(pct, report.text || `${pct}%`);
       },
@@ -97,7 +95,7 @@ async function loadModel() {
     setStatus("ready-model", "Model ready");
     el.btnStartShare.disabled = false;
     el.btnLoadModel.disabled = false;
-    setMeta(`Loaded: ${modelId}`);
+    setMeta(`Loaded: ${modelId} (light text model)`);
   } catch (err) {
     console.error(err);
     hideProgress();
@@ -105,24 +103,21 @@ async function loadModel() {
     el.btnLoadModel.disabled = false;
     setMeta(`Error: ${err.message || err}`);
     alert(
-      "モデルの読み込みに失敗しました。\nWebGPU 対応ブラウザ (Chrome 124+) と十分な VRAM / ディスク空きを確認してください。\n\n" +
+      "モデル読み込み失敗。\nChrome 124+ / 十分な空きメモリを確認してください。\n\n" +
         (err.message || err)
     );
   }
 }
 
-// ─── Screen Capture API (getDisplayMedia) ──────────────
+// ─── Screen Capture API ────────────────────────────────
 async function startScreenShare() {
   try {
-    // Screen Capture API
     mediaStream = await navigator.mediaDevices.getDisplayMedia({
       video: {
         cursor: "never",
-        displaySurface: "monitor",
-        frameRate: { ideal: 5, max: 10 },
+        frameRate: { ideal: 5, max: 8 },
       },
       audio: false,
-      preferCurrentTab: false,
     });
 
     el.previewVideo.srcObject = mediaStream;
@@ -134,13 +129,12 @@ async function startScreenShare() {
     el.btnSolve.disabled = !engine;
     setStatus("sharing", "Sharing screen");
 
-    // Auto-stop when user ends share from browser UI
     mediaStream.getVideoTracks()[0].addEventListener("ended", () => {
       stopScreenShare();
     });
   } catch (err) {
     console.error(err);
-    setMeta(`Screen share cancelled or failed: ${err.message || err}`);
+    setMeta(`Screen share cancelled: ${err.message || err}`);
   }
 }
 
@@ -158,16 +152,15 @@ function stopScreenShare() {
   setStatus(engine ? "ready-model" : "ready", engine ? "Model ready" : "Ready");
 }
 
-// ─── Capture frame → base64 ────────────────────────────
-function captureFrameAsDataURL() {
+// ─── Capture frame ─────────────────────────────────────
+function captureFrameAsBlob() {
   const video = el.previewVideo;
   if (!video.videoWidth || !video.videoHeight) {
     throw new Error("Video not ready");
   }
 
   const canvas = el.captureCanvas;
-  // Cap long side to keep token / memory reasonable for VLM
-  const maxSide = 1280;
+  const maxSide = 960;
   let w = video.videoWidth;
   let h = video.videoHeight;
   if (Math.max(w, h) > maxSide) {
@@ -181,31 +174,50 @@ function captureFrameAsDataURL() {
   const ctx = canvas.getContext("2d", { alpha: false });
   ctx.drawImage(video, 0, 0, w, h);
 
-  // JPEG keeps size down for faster transfer into the model
-  return canvas.toDataURL("image/jpeg", 0.85);
+  return new Promise((resolve) => {
+    canvas.toBlob((blob) => resolve(blob), "image/png");
+  });
 }
 
-// ─── Prompt (strict output) ────────────────────────────
-const SYSTEM_PROMPT = `You are a precise quiz solver for Japanese-English vocabulary / grammar tests.
+// ─── OCR (Tesseract.js) ────────────────────────────────
+async function runOCR(blob) {
+  if (!ocrWorker) {
+    setMeta("Initializing OCR worker…");
+    ocrWorker = await Tesseract.createWorker("jpn+eng", 1, {
+      logger: (m) => {
+        if (m.status === "recognizing text" && m.progress != null) {
+          showProgress(Math.round(m.progress * 100), `OCR ${Math.round(m.progress * 100)}%`);
+        }
+      },
+    });
+  }
 
-The screenshot shows a test screen. Typical layouts:
-1. Multiple choice: Japanese word at the top (e.g. 炎症, 重大な). Below are English options in white boxes.
-2. Input / fill-in-the-blank: Japanese prompt + empty text box (or sentence with blank).
+  const { data } = await ocrWorker.recognize(blob);
+  return (data.text || "").trim();
+}
 
-Your ONLY job:
-- Identify the question (Japanese).
-- Identify the correct English answer (the matching word or the word that fills the blank).
-- Output EXACTLY that English answer and nothing else.
-- No quotes, no labels, no explanation, no punctuation around the word.
-- If multiple choice, output the exact option text that is correct.
-- If input type, output the single correct English word/phrase.
+// ─── Prompt for text model ─────────────────────────────
+function buildPrompt(ocrText) {
+  return `You are a precise quiz solver for Japanese-English vocabulary tests.
 
-Examples of correct output format:
-inflammation
-serious
-inflict
+Below is OCR text extracted from a quiz screen.
+Typical patterns:
+- Japanese word at top (e.g. 炎症, 重大な)
+- English options listed below, OR an input field
 
-Never output Japanese. Never output more than the answer itself.`;
+Task:
+1. Identify the Japanese question.
+2. Choose the correct English answer (matching word or fill-in).
+3. Output ONLY the English answer word/phrase. Nothing else.
+No quotes, no labels, no explanation.
+
+OCR text:
+"""
+${ocrText}
+"""
+
+Answer:`;
+}
 
 // ─── Solve ─────────────────────────────────────────────
 async function solve() {
@@ -213,67 +225,66 @@ async function solve() {
 
   isSolving = true;
   el.btnSolve.disabled = true;
-  setStatus("loading", "Analyzing…");
-  setMeta("Capturing frame & running VLM…");
+  setStatus("loading", "OCR + LLM…");
+  setMeta("Capturing frame…");
   renderAnswer("…");
+  showProgress(5, "Capture");
 
   const t0 = performance.now();
 
   try {
-    const dataUrl = captureFrameAsDataURL();
+    const blob = await captureFrameAsBlob();
+    showProgress(15, "OCR running…");
 
-    const messages = [
-      {
-        role: "user",
-        content: [
-          { type: "text", text: SYSTEM_PROMPT },
-          {
-            type: "image_url",
-            image_url: { url: dataUrl },
-          },
-        ],
-      },
-    ];
+    const ocrText = await runOCR(blob);
+    if (el.ocrPreview) {
+      el.ocrPreview.textContent = ocrText.slice(0, 400) || "(empty)";
+    }
 
+    if (!ocrText || ocrText.length < 3) {
+      throw new Error("OCR returned almost no text. Check screen content / language.");
+    }
+
+    showProgress(55, "LLM generating…");
+    setMeta("OCR done → generating answer…");
+
+    const prompt = buildPrompt(ocrText);
     const reply = await engine.chat.completions.create({
-      messages,
+      messages: [{ role: "user", content: prompt }],
       stream: false,
       temperature: 0.1,
-      max_tokens: 32,
+      max_tokens: 24,
     });
 
-    const raw =
+    let raw =
       reply.choices?.[0]?.message?.content ??
       (await engine.getMessage()) ??
       "";
 
-    // Extra safety: take only first line / first token-ish
     let answer = String(raw)
       .split("\n")[0]
       .replace(/^answer\s*[:=]\s*/i, "")
       .replace(/^正解\s*[:=]\s*/i, "")
+      .replace(/^["'\`]+|["'\`]+$/g, "")
       .trim();
 
-    // Prefer single word if model added noise
-    if (answer.includes(" ")) {
-      // keep short phrases that look like the option
-      const candidates = answer.split(/[,，、]/).map((s) => s.trim()).filter(Boolean);
-      if (candidates.length === 1) answer = candidates[0];
+    if (answer.length > 40) {
+      answer = answer.split(/[\s,，、]/)[0] || answer.slice(0, 30);
     }
 
+    hideProgress();
     renderAnswer(answer);
 
     const ms = Math.round(performance.now() - t0);
     const usage = reply.usage;
     setMeta(
-      `Done in ${ms} ms` +
-        (usage
-          ? ` · prompt ${usage.prompt_tokens} / completion ${usage.completion_tokens}`
-          : "")
+      `Done ${ms} ms · OCR chars ${ocrText.length}` +
+        (usage ? ` · tokens ${usage.prompt_tokens}+${usage.completion_tokens}` : "")
     );
     setStatus("sharing", "Sharing screen");
   } catch (err) {
     console.error(err);
+    hideProgress();
     renderAnswer("Error");
     setMeta(`Error: ${err.message || err}`);
     setStatus("error", "Solve failed");
@@ -289,7 +300,6 @@ el.btnStartShare.addEventListener("click", startScreenShare);
 el.btnStopShare.addEventListener("click", stopScreenShare);
 el.btnSolve.addEventListener("click", solve);
 
-// Keyboard shortcut: Ctrl/Cmd + Enter to solve
 document.addEventListener("keydown", (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
     e.preventDefault();
@@ -297,6 +307,11 @@ document.addEventListener("keydown", (e) => {
   }
 });
 
-// Initial
+window.addEventListener("beforeunload", () => {
+  if (ocrWorker) {
+    ocrWorker.terminate().catch(() => {});
+  }
+});
+
 setStatus("ready", "Ready");
-setMeta("Load a vision model first (one-time download ~2–4 GB).");
+setMeta("Load a light text model first (~200–700 MB).");
