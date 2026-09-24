@@ -1,6 +1,7 @@
 /**
  * QuizAI v4 — Groq Vision (free) primary + OpenRouter free fallback
  * Screen Capture API → image → vision model → answer only
+ * + auto clipboard copy on success
  */
 
 const $ = (id) => document.getElementById(id);
@@ -50,7 +51,32 @@ function renderAnswer(text) {
   const p = document.createElement("p");
   p.textContent = clean || "—";
   el.answerBox.appendChild(p);
+  return clean;
 }
+
+async function copyAnswer(text) {
+  const t = String(text || "").trim();
+  if (!t || t === "—" || t === "…" || t === "Error") return false;
+  try {
+    await navigator.clipboard.writeText(t);
+    return true;
+  } catch (e) {
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = t;
+      ta.style.position = "fixed";
+      ta.style.left = "-9999px";
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      ta.remove();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+}
+
 function setMeta(msg) {
   el.metaInfo.textContent = msg || "";
 }
@@ -279,8 +305,13 @@ async function solve() {
     const answer = cleanAnswer(raw);
     hideProgress();
     renderAnswer(answer);
+    const copied = await copyAnswer(answer);
     const ms = Math.round(performance.now() - t0);
-    setMeta(`${ms} ms · ${getProvider()} · raw: "${String(raw).slice(0, 36)}"`);
+    setMeta(
+      `${ms} ms · ${getProvider()}` +
+        (copied ? " · copied" : "") +
+        ` · raw: "${String(raw).slice(0, 36)}"`
+    );
     setStatus("sharing", "Sharing");
   } catch (err) {
     console.error(err);
