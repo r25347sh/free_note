@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>WebGazer アイトラッキング テスト</title>
+    <!-- 1. CDNからWebGazer.jsを読み込む -->
+    <script src="https://brown.edu" type="text/javascript"></script>
+</head>
+<body>
+
+    <h1>アイトラッキング テストページ</h1>
+    <p>画面のあちこちをクリックして、キャリブレーション（精度向上）を行ってください。</p>
+    
+    <div id="gaze-info" style="position: fixed; bottom: 20px; left: 20px; font-size: 20px; font-weight: bold; background: white; padding: 10px; border: 1px solid #ccc;">
+        視線座標: X: 0, Y: 0
+    </div>
+
+    <script>
+        window.onload = async function() {
+            // 2. WebGazerの初期設定と開始
+            webgazer.setGazeListener(function(data, elapsedTime) {
+                if (data == null) {
+                    return;
+                }
+                var xprediction = data.x; // 画面上のX座標（ピクセル）
+                var yprediction = data.y; // 画面上のY座標（ピクセル）
+                
+                // 取得した座標を画面に表示
+                document.getElementById('gaze-info').innerText = `視線座標: X: ${Math.round(xprediction)}, Y: ${Math.round(yprediction)}`;
+            }).begin();
+
+            // デバッグ用のカメラ映像や、注視点の赤いドット（予測ポイント）を表示する設定
+            webgazer.showVideoPreview(true) /* カメラ映像の表示 */
+                     .showPredictionPoints(true) /* 視線ドットの表示 */
+                     .applyKalmanFilter(true); /* データのブレを抑えるフィルター（精度向上） */
+        };
+
+        // ページを閉じる際にトラッキングを停止
+        window.onbeforeunload = function() {
+            webgazer.end();
+        };
+    </script>
+</body>
+</html>
